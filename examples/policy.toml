@@ -1,0 +1,99 @@
+# Example Blueprint policy file
+
+[filesystem]
+# Allow reading from common locations
+allow_read = [
+    "/tmp",
+    "/tmp/**",
+    "./data/**",
+    "~/.config/blueprint/**",
+]
+
+# Allow writing to safe locations
+allow_write = [
+    "/tmp/**",
+    "./output/**",
+]
+
+# Deny access to sensitive files
+deny_read = [
+    "**/.env",
+    "**/secrets/**",
+    "**/*.key",
+    "**/*.pem",
+]
+
+deny_write = [
+    "/etc/**",
+    "/usr/**",
+    "~/**/.ssh/**",
+]
+
+[network]
+# HTTP access
+allow_http = [
+    "https://api.github.com/**",
+    "https://httpbin.org/**",
+]
+
+deny_http = [
+    "**/*.evil.com/**",
+]
+
+# TCP/UDP
+allow_tcp = [
+    "localhost:*",
+    "127.0.0.1:*",
+]
+
+deny_tcp = [
+    "*:22",   # SSH
+    "*:23",   # Telnet
+]
+
+allow_udp = [
+    "*:53",   # DNS
+]
+
+deny_udp = []
+
+[exec]
+# Safe commands
+allow_commands = [
+    "git",
+    "npm",
+    "cargo",
+    "python",
+    "echo",
+    "ls",
+    "cat",
+]
+
+# Dangerous commands
+deny_commands = [
+    "rm",
+    "sudo",
+    "su",
+    "chmod",
+    "chown",
+    "dd",
+]
+
+[env]
+# Allow reading common environment variables
+allow_vars = [
+    "HOME",
+    "USER",
+    "PATH",
+    "PWD",
+    "SHELL",
+]
+
+# Deny sensitive variables
+deny_vars = [
+    "AWS_*",
+    "*_TOKEN",
+    "*_SECRET",
+    "*_KEY",
+    "*_PASSWORD",
+]

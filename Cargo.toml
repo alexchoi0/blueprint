@@ -1,0 +1,116 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/common",
+    "crates/approval",
+    "crates/generator",
+    "crates/interpreter",
+    "crates/storage",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+
+[workspace.dependencies]
+# Internal crates
+blueprint_common = { path = "crates/common" }
+blueprint_approval = { path = "crates/approval" }
+blueprint_generator = { path = "crates/generator" }
+blueprint_interpreter = { path = "crates/interpreter" }
+blueprint_storage = { path = "crates/storage" }
+
+starlark_syntax = "0.13"
+allocative = "0.3"
+allocative_derive = "0.3"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+
+# HTTP client
+reqwest = { version = "0.12", features = ["json", "stream"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+bincode = "1"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+dialoguer = "0.11"
+console = "0.15"
+
+# Glob matching
+glob = "0.3"
+
+# Error handling
+anyhow = "1"
+thiserror = "1"
+
+# Caching
+lru = "0.12"
+moka = { version = "0.12", features = ["sync"] }
+
+# Ordered collections (deterministic iteration)
+indexmap = { version = "2", features = ["serde"] }
+
+# Async utilities
+futures = "0.3"
+
+# HTTP server for webhooks
+hyper = { version = "1", features = ["server", "http1", "http2"] }
+hyper-util = { version = "0.1", features = ["tokio", "server", "server-auto"] }
+http-body-util = "0.1"
+
+# File watching
+notify = "6"
+
+# URL parsing
+url = "2"
+
+# Database ORM
+sea-orm = { version = "1", features = ["sqlx-sqlite", "runtime-tokio-native-tls", "macros"] }
+
+# UUID
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Time
+chrono = { version = "0.4", features = ["serde"] }
+
+# SHA256 for script hashing
+sha2 = "0.10"
+
+# Dev dependencies
+criterion = { version = "0.5", features = ["async_tokio"] }
+tempfile = "3"
+
+[package]
+name = "blueprint"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blueprint_approval.workspace = true
+blueprint_common.workspace = true
+blueprint_generator.workspace = true
+blueprint_interpreter.workspace = true
+blueprint_storage.workspace = true
+
+clap.workspace = true
+tokio.workspace = true
+anyhow.workspace = true
+uuid.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+criterion.workspace = true
+starlark_syntax.workspace = true
+bincode.workspace = true
+blueprint_common.workspace = true
+blueprint_generator.workspace = true
+blueprint_interpreter.workspace = true
+
+[[bench]]
+name = "blueprint_bench"
+harness = false

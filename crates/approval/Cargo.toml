@@ -1,0 +1,12 @@
+[package]
+name = "blueprint_approval"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+glob.workspace = true
+serde.workspace = true
+toml.workspace = true
+console.workspace = true
+dialoguer.workspace = true

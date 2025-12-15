@@ -1,0 +1,30 @@
+[package]
+name = "blueprint_generator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blueprint_common.workspace = true
+blueprint_approval.workspace = true
+blueprint_storage.workspace = true
+
+starlark_syntax.workspace = true
+tokio.workspace = true
+reqwest.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+bincode.workspace = true
+indexmap.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+lru.workspace = true
+futures.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+http-body-util.workspace = true
+notify.workspace = true
+url.workspace = true
+console.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true

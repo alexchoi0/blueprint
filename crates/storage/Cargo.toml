@@ -1,0 +1,17 @@
+[package]
+name = "blueprint_storage"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+blueprint_common.workspace = true
+
+serde.workspace = true
+serde_json.workspace = true
+bincode.workspace = true
+sea-orm.workspace = true
+uuid.workspace = true
+chrono.workspace = true
+sha2.workspace = true
+anyhow.workspace = true
+tokio.workspace = true
