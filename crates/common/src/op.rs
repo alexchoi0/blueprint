@@ -234,6 +234,13 @@ pub enum OpKind {
         name: String,
         value: ValueRef,
     },
+
+    /// User-defined function definition
+    UserDefinedFunction {
+        name: String,
+        params: Vec<String>,
+        body: SubPlan,
+    },
 }
 
 impl OpKind {
@@ -322,6 +329,7 @@ impl OpKind {
             OpKind::GeneratorYieldIf { .. } => "GeneratorYieldIf",
             OpKind::ParamRef { .. } => "ParamRef",
             OpKind::FrozenValue { .. } => "FrozenValue",
+            OpKind::UserDefinedFunction { .. } => "UserDefinedFunction",
         }
     }
 
@@ -410,7 +418,8 @@ impl OpKind {
             | OpKind::GeneratorYield { .. }
             | OpKind::GeneratorYieldIf { .. }
             | OpKind::ParamRef { .. }
-            | OpKind::FrozenValue { .. } => false,
+            | OpKind::FrozenValue { .. }
+            | OpKind::UserDefinedFunction { .. } => false,
         }
     }
 
@@ -504,6 +513,7 @@ impl OpKind {
             OpKind::GeneratorYieldIf { condition, value } => vec![condition, value],
             OpKind::ParamRef { .. } => vec![],
             OpKind::FrozenValue { value, .. } => vec![value],
+            OpKind::UserDefinedFunction { .. } => vec![],
         }
     }
 
@@ -597,6 +607,7 @@ impl OpKind {
             OpKind::GeneratorYieldIf { condition, value } => vec![condition, value],
             OpKind::ParamRef { .. } => vec![],
             OpKind::FrozenValue { value, .. } => vec![value],
+            OpKind::UserDefinedFunction { .. } => vec![],
         }
     }
 
@@ -794,6 +805,11 @@ impl OpKind {
             OpKind::GeneratorYieldIf { condition, value } => vec![("condition", condition.to_text()), ("value", value.to_text())],
             OpKind::ParamRef { name } => vec![("name", name.clone())],
             OpKind::FrozenValue { name, value } => vec![("name", name.clone()), ("value", value.to_text())],
+            OpKind::UserDefinedFunction { name, params, .. } => vec![
+                ("name", name.clone()),
+                ("params", format!("{:?}", params)),
+                ("body", "<subplan>".to_string()),
+            ],
         }
     }
 }
@@ -917,6 +933,7 @@ impl std::fmt::Display for OpKind {
             OpKind::GeneratorYieldIf { condition, value } => write!(f, "GeneratorYieldIf({}, {})", condition, value),
             OpKind::ParamRef { name } => write!(f, "ParamRef({})", name),
             OpKind::FrozenValue { name, value } => write!(f, "FrozenValue({} = {})", name, value),
+            OpKind::UserDefinedFunction { name, params, .. } => write!(f, "def {}({}) {{ ... }}", name, params.join(", ")),
         }
     }
 }

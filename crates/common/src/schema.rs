@@ -296,6 +296,13 @@ pub enum SchemaOp {
 
     /// Exports a global variable as a frozen value
     FrozenValue { name: String, value: SchemaValue },
+
+    /// User-defined function that can be called later
+    UserDefinedFunction {
+        name: String,
+        params: Vec<String>,
+        body: SchemaSubPlan,
+    },
 }
 
 impl SchemaOp {
@@ -381,6 +388,7 @@ impl SchemaOp {
             SchemaOp::Break => "break",
             SchemaOp::Continue => "continue",
             SchemaOp::FrozenValue { .. } => "frozen_value",
+            SchemaOp::UserDefinedFunction { .. } => "user_defined_function",
         }
     }
 
@@ -461,6 +469,7 @@ impl SchemaOp {
             SchemaOp::IfBlock { condition, .. } => vec![condition],
             SchemaOp::Break | SchemaOp::Continue => vec![],
             SchemaOp::FrozenValue { value, .. } => vec![value],
+            SchemaOp::UserDefinedFunction { .. } => vec![],
         }
     }
 
@@ -617,6 +626,11 @@ impl SchemaOp {
             SchemaOp::Break => vec![],
             SchemaOp::Continue => vec![],
             SchemaOp::FrozenValue { name, value } => vec![("name", name.clone()), ("value", value.to_text())],
+            SchemaOp::UserDefinedFunction { name, params, .. } => vec![
+                ("name", name.clone()),
+                ("params", format!("{:?}", params)),
+                ("body", "<subplan>".to_string()),
+            ],
         }
     }
 }
@@ -717,6 +731,9 @@ impl std::fmt::Display for SchemaOp {
             SchemaOp::Break => write!(f, "break"),
             SchemaOp::Continue => write!(f, "continue"),
             SchemaOp::FrozenValue { name, value } => write!(f, "frozen({} = {})", name, value),
+            SchemaOp::UserDefinedFunction { name, params, .. } => {
+                write!(f, "def {}({}) {{ ... }}", name, params.join(", "))
+            }
         }
     }
 }

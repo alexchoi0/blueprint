@@ -244,6 +244,7 @@ impl BlueprintInterpreter {
             OpKind::IfBlock { condition, .. } => vec![condition.clone()],
             OpKind::Break | OpKind::Continue => vec![],
             OpKind::FrozenValue { value, .. } => vec![value.clone()],
+            OpKind::UserDefinedFunction { .. } => vec![],
         }
     }
 
@@ -1331,6 +1332,18 @@ async fn execute_op(
             let result_value = resolver.resolve(value)
                 .ok_or_else(|| ExecutionError::ResolutionFailed(op_id))?;
             Ok(result_value)
+        }
+
+        OpKind::UserDefinedFunction { name, params, body: _ } => {
+            Ok(RecordedValue::Dict({
+                let mut map = std::collections::BTreeMap::new();
+                map.insert("type".to_string(), RecordedValue::String("function".to_string()));
+                map.insert("name".to_string(), RecordedValue::String(name.clone()));
+                map.insert("params".to_string(), RecordedValue::List(
+                    params.iter().map(|p| RecordedValue::String(p.clone())).collect()
+                ));
+                map
+            }))
         }
     }
 }

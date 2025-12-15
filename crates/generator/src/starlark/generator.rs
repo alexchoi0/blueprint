@@ -455,7 +455,8 @@ impl SchemaGenerator {
             SchemaOp::ToFloat { .. } |
             SchemaOp::ToStr { .. } |
             SchemaOp::If { .. } |
-            SchemaOp::FrozenValue { .. } => true,
+            SchemaOp::FrozenValue { .. } |
+            SchemaOp::UserDefinedFunction { .. } => true,
         }
     }
 

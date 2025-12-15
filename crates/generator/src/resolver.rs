@@ -566,6 +566,14 @@ impl<'a> PlanGenerator<'a> {
                 name: name.clone(),
                 value: self.resolve_value(value, id_map)?,
             }]),
+
+            SchemaOp::UserDefinedFunction { name, params, body } => {
+                Ok(vec![OpKind::UserDefinedFunction {
+                    name: name.clone(),
+                    params: params.clone(),
+                    body: self.resolve_subplan(body, id_map)?,
+                }])
+            }
         }
     }
 
