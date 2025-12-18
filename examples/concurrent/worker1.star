@@ -1,0 +1,7 @@
+print("[Worker 1] Starting...")
+sleep(0.1)
+print("[Worker 1] Step 1 complete")
+sleep(0.1)
+print("[Worker 1] Step 2 complete")
+sleep(0.1)
+print("[Worker 1] Done!")
