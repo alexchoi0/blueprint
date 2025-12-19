@@ -147,7 +147,13 @@ impl Scope {
     }
 
     pub async fn exports(&self) -> HashMap<String, Value> {
-        self.variables.read().await.clone()
+        self.variables
+            .read()
+            .await
+            .iter()
+            .filter(|(k, _)| !k.starts_with('_'))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
     }
 
     #[async_recursion::async_recursion]
