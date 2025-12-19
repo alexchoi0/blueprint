@@ -88,6 +88,9 @@ pub enum BlueprintError {
     #[error("Name error: undefined variable '{name}'")]
     NameError { name: String },
 
+    #[error("Import error: {message}")]
+    ImportError { message: String },
+
     #[error("Attribute error: '{type_name}' has no attribute '{attr}'")]
     AttributeError { type_name: String, attr: String },
 

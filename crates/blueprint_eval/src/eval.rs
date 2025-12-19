@@ -369,11 +369,20 @@ impl Evaluator {
             let their_name = &arg.their.node;
 
             let value = exports.get(their_name).cloned().ok_or_else(|| {
-                BlueprintError::NameError {
-                    name: format!(
-                        "'{}' not found in module '{}'",
-                        their_name, module_path
-                    ),
+                if their_name.starts_with('_') {
+                    BlueprintError::ImportError {
+                        message: format!(
+                            "'{}' is private and cannot be imported from '{}'",
+                            their_name, module_path
+                        ),
+                    }
+                } else {
+                    BlueprintError::ImportError {
+                        message: format!(
+                            "'{}' not found in module '{}'",
+                            their_name, module_path
+                        ),
+                    }
                 }
             })?;
 
