@@ -32,6 +32,8 @@ pub fn register(evaluator: &mut Evaluator) {
     evaluator.register_native(NativeFunction::new("repr", repr));
     evaluator.register_native(NativeFunction::new("fail", fail));
     evaluator.register_native(NativeFunction::new("assert_", assert_));
+    evaluator.register_native(NativeFunction::new("assert_eq", assert_eq));
+    evaluator.register_native(NativeFunction::new("assert_contains", assert_contains));
 }
 
 async fn len(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
@@ -667,4 +669,255 @@ async fn assert_(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
     }
 
     Ok(Value::None)
+}
+
+async fn assert_eq(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err(BlueprintError::ArgumentError {
+            message: format!("assert_eq() takes 2 or 3 arguments ({} given)", args.len()),
+        });
+    }
+
+    let expected = &args[0];
+    let actual = &args[1];
+
+    if !values_equal(expected, actual).await {
+        let user_msg = if args.len() == 3 {
+            format!("{}\n", args[2].to_display_string())
+        } else {
+            String::new()
+        };
+        let diff = generate_diff(expected, actual).await;
+        let message = format!(
+            "{user_msg}\n  expected: {}\n  actual:   {}\n  diff:\n{diff}",
+            expected.repr(),
+            actual.repr(),
+        );
+        return Err(BlueprintError::AssertionError { message });
+    }
+
+    Ok(Value::None)
+}
+
+async fn assert_contains(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.len() < 2 || args.len() > 3 {
+        return Err(BlueprintError::ArgumentError {
+            message: format!("assert_contains() takes 2 or 3 arguments ({} given)", args.len()),
+        });
+    }
+
+    let expected = &args[0];
+    let actual = &args[1];
+
+    if !value_contains(expected, actual).await {
+        let user_msg = if args.len() == 3 {
+            format!("{}\n", args[2].to_display_string())
+        } else {
+            String::new()
+        };
+        let diff = generate_contains_diff(expected, actual).await;
+        let message = format!(
+            "{user_msg}\n  expected: {}\n  actual:   {}\n  diff:\n{diff}",
+            expected.repr(),
+            actual.repr(),
+        );
+        return Err(BlueprintError::AssertionError { message });
+    }
+
+    Ok(Value::None)
+}
+
+async fn values_equal(left: &Value, right: &Value) -> bool {
+    match (left, right) {
+        (Value::Dict(a), Value::Dict(b)) => {
+            let a_map = a.read().await;
+            let b_map = b.read().await;
+            if a_map.len() != b_map.len() {
+                return false;
+            }
+            for (k, v) in a_map.iter() {
+                match b_map.get(k) {
+                    Some(bv) => {
+                        if !Box::pin(values_equal(v, bv)).await {
+                            return false;
+                        }
+                    }
+                    None => return false,
+                }
+            }
+            true
+        }
+        (Value::List(a), Value::List(b)) => {
+            let a_list = a.read().await;
+            let b_list = b.read().await;
+            if a_list.len() != b_list.len() {
+                return false;
+            }
+            for (av, bv) in a_list.iter().zip(b_list.iter()) {
+                if !Box::pin(values_equal(av, bv)).await {
+                    return false;
+                }
+            }
+            true
+        }
+        _ => left == right,
+    }
+}
+
+async fn value_contains(expected: &Value, actual: &Value) -> bool {
+    match (expected, actual) {
+        (Value::Dict(exp), Value::Dict(act)) => {
+            let exp_map = exp.read().await;
+            let act_map = act.read().await;
+            for (k, v) in exp_map.iter() {
+                match act_map.get(k) {
+                    Some(av) => {
+                        if !Box::pin(value_contains(v, av)).await {
+                            return false;
+                        }
+                    }
+                    None => return false,
+                }
+            }
+            true
+        }
+        (Value::List(exp), Value::List(act)) => {
+            let exp_list = exp.read().await;
+            let act_list = act.read().await;
+            if exp_list.len() > act_list.len() {
+                return false;
+            }
+            for (ev, av) in exp_list.iter().zip(act_list.iter()) {
+                if !Box::pin(value_contains(ev, av)).await {
+                    return false;
+                }
+            }
+            true
+        }
+        _ => expected == actual,
+    }
+}
+
+async fn generate_diff(expected: &Value, actual: &Value) -> String {
+    let mut lines = Vec::new();
+    generate_diff_inner(expected, actual, &mut lines, "").await;
+    lines.join("\n")
+}
+
+#[async_recursion::async_recursion]
+async fn generate_diff_inner(expected: &Value, actual: &Value, lines: &mut Vec<String>, path: &str) {
+    match (expected, actual) {
+        (Value::Dict(exp), Value::Dict(act)) => {
+            let exp_map = exp.read().await;
+            let act_map = act.read().await;
+
+            for (k, v) in exp_map.iter() {
+                let key_path = if path.is_empty() { k.clone() } else { format!("{}.{}", path, k) };
+                match act_map.get(k) {
+                    Some(av) => {
+                        if !Box::pin(values_equal(v, av)).await {
+                            generate_diff_inner(v, av, lines, &key_path).await;
+                        }
+                    }
+                    None => {
+                        lines.push(format!("    - {}: {}", key_path, v.repr()));
+                    }
+                }
+            }
+            for (k, v) in act_map.iter() {
+                if !exp_map.contains_key(k) {
+                    let key_path = if path.is_empty() { k.clone() } else { format!("{}.{}", path, k) };
+                    lines.push(format!("    + {}: {}", key_path, v.repr()));
+                }
+            }
+        }
+        (Value::List(exp), Value::List(act)) => {
+            let exp_list = exp.read().await;
+            let act_list = act.read().await;
+            let max_len = exp_list.len().max(act_list.len());
+
+            for i in 0..max_len {
+                let idx_path = if path.is_empty() { format!("[{}]", i) } else { format!("{}[{}]", path, i) };
+                match (exp_list.get(i), act_list.get(i)) {
+                    (Some(ev), Some(av)) => {
+                        if !Box::pin(values_equal(ev, av)).await {
+                            generate_diff_inner(ev, av, lines, &idx_path).await;
+                        }
+                    }
+                    (Some(ev), None) => {
+                        lines.push(format!("    - {}: {}", idx_path, ev.repr()));
+                    }
+                    (None, Some(av)) => {
+                        lines.push(format!("    + {}: {}", idx_path, av.repr()));
+                    }
+                    (None, None) => {}
+                }
+            }
+        }
+        _ => {
+            if path.is_empty() {
+                lines.push(format!("    - {}", expected.repr()));
+                lines.push(format!("    + {}", actual.repr()));
+            } else {
+                lines.push(format!("    - {}: {}", path, expected.repr()));
+                lines.push(format!("    + {}: {}", path, actual.repr()));
+            }
+        }
+    }
+}
+
+async fn generate_contains_diff(expected: &Value, actual: &Value) -> String {
+    let mut lines = Vec::new();
+    generate_contains_diff_inner(expected, actual, &mut lines, "").await;
+    lines.join("\n")
+}
+
+#[async_recursion::async_recursion]
+async fn generate_contains_diff_inner(expected: &Value, actual: &Value, lines: &mut Vec<String>, path: &str) {
+    match (expected, actual) {
+        (Value::Dict(exp), Value::Dict(act)) => {
+            let exp_map = exp.read().await;
+            let act_map = act.read().await;
+
+            for (k, v) in exp_map.iter() {
+                let key_path = if path.is_empty() { k.clone() } else { format!("{}.{}", path, k) };
+                match act_map.get(k) {
+                    Some(av) => {
+                        if !Box::pin(value_contains(v, av)).await {
+                            generate_contains_diff_inner(v, av, lines, &key_path).await;
+                        }
+                    }
+                    None => {
+                        lines.push(format!("    missing key '{}': expected {}", key_path, v.repr()));
+                    }
+                }
+            }
+        }
+        (Value::List(exp), Value::List(act)) => {
+            let exp_list = exp.read().await;
+            let act_list = act.read().await;
+
+            for (i, ev) in exp_list.iter().enumerate() {
+                let idx_path = if path.is_empty() { format!("[{}]", i) } else { format!("{}[{}]", path, i) };
+                match act_list.get(i) {
+                    Some(av) => {
+                        if !Box::pin(value_contains(ev, av)).await {
+                            generate_contains_diff_inner(ev, av, lines, &idx_path).await;
+                        }
+                    }
+                    None => {
+                        lines.push(format!("    missing {}: expected {}", idx_path, ev.repr()));
+                    }
+                }
+            }
+        }
+        _ => {
+            if path.is_empty() {
+                lines.push(format!("    expected: {}", expected.repr()));
+                lines.push(format!("    actual:   {}", actual.repr()));
+            } else {
+                lines.push(format!("    {}: expected {}, got {}", path, expected.repr(), actual.repr()));
+            }
+        }
+    }
 }
