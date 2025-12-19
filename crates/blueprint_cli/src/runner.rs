@@ -305,12 +305,146 @@ pub async fn repl(port: Option<u16>) -> Result<()> {
     }
 }
 
+use rustyline::validate::{ValidationContext, ValidationResult, Validator};
+use rustyline::highlight::Highlighter;
+use rustyline::hint::Hinter;
+use rustyline::completion::Completer;
+use rustyline::{Helper, ConditionalEventHandler, Event, RepeatCount, Cmd};
+
+#[derive(Clone)]
+struct ReplHelper;
+
+struct EnterHandler;
+
+impl ConditionalEventHandler for EnterHandler {
+    fn handle(&self, evt: &Event, _n: RepeatCount, _positive: bool, ctx: &rustyline::EventContext) -> Option<Cmd> {
+        if let Some(k) = evt.get(0) {
+            if let rustyline::KeyEvent { 0: rustyline::KeyCode::Enter, .. } = k {
+                let input = ctx.line();
+                if needs_more_input(input) {
+                    return Some(Cmd::Insert(1, "\n... ".to_string()));
+                } else {
+                    return Some(Cmd::AcceptLine);
+                }
+            }
+        }
+        None
+    }
+}
+
+impl Completer for ReplHelper {
+    type Candidate = String;
+}
+
+impl Hinter for ReplHelper {
+    type Hint = String;
+}
+
+impl Highlighter for ReplHelper {}
+
+const CONTINUATION_PREFIX: &str = "... ";
+
+fn strip_continuation_prefixes(input: &str) -> String {
+    input
+        .lines()
+        .enumerate()
+        .map(|(i, line)| {
+            if i > 0 && line.starts_with(CONTINUATION_PREFIX) {
+                &line[CONTINUATION_PREFIX.len()..]
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn needs_more_input(input: &str) -> bool {
+    if input.ends_with("... ") || input.ends_with("...\n") {
+        return false;
+    }
+
+    let clean = strip_continuation_prefixes(input);
+
+    if clean.trim().is_empty() {
+        return false;
+    }
+
+    let mut bracket_depth = 0i32;
+    let mut in_string = false;
+    let mut string_char = ' ';
+    let mut prev_char = ' ';
+
+    for ch in clean.chars() {
+        if in_string {
+            if ch == string_char && prev_char != '\\' {
+                in_string = false;
+            }
+        } else {
+            match ch {
+                '"' | '\'' => {
+                    in_string = true;
+                    string_char = ch;
+                }
+                '(' | '[' | '{' => bracket_depth += 1,
+                ')' | ']' | '}' => bracket_depth -= 1,
+                _ => {}
+            }
+        }
+        prev_char = ch;
+    }
+
+    if bracket_depth > 0 || in_string {
+        return true;
+    }
+
+    let lines: Vec<&str> = clean.lines().collect();
+
+    if let Some(last_line) = lines.last() {
+        let last_trimmed = last_line.trim();
+        if last_trimmed.ends_with(':') {
+            return true;
+        }
+    }
+
+    let has_block_starter = lines.iter().any(|l| l.trim().ends_with(':'));
+    if has_block_starter {
+        if let Some(last_line) = lines.last() {
+            if last_line.trim().is_empty() {
+                return false;
+            }
+            if last_line.starts_with(|c: char| c.is_whitespace()) {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+impl Validator for ReplHelper {
+    fn validate(&self, ctx: &mut ValidationContext) -> rustyline::Result<ValidationResult> {
+        let input = ctx.input();
+
+        if input.trim().is_empty() {
+            return Ok(ValidationResult::Valid(None));
+        }
+
+        if needs_more_input(input) {
+            Ok(ValidationResult::Incomplete)
+        } else {
+            Ok(ValidationResult::Valid(None))
+        }
+    }
+}
+
+impl Helper for ReplHelper {}
+
 async fn repl_interactive() -> Result<()> {
     use rustyline::error::ReadlineError;
-    use rustyline::{Config, Editor, EditMode, KeyEvent, Cmd, EventHandler};
+    use rustyline::{Config, Editor, EditMode, KeyEvent, EventHandler};
 
     println!("Blueprint REPL (type 'exit' or Ctrl+D to quit)");
-    println!("Press Enter on empty line to execute");
     println!();
 
     let mut evaluator = Evaluator::new();
@@ -323,47 +457,37 @@ async fn repl_interactive() -> Result<()> {
         .edit_mode(EditMode::Emacs)
         .build();
 
-    let mut rl: Editor<(), _> = Editor::with_config(config).map_err(|e| {
+    let mut rl: Editor<ReplHelper, _> = Editor::with_config(config).map_err(|e| {
         BlueprintError::InternalError {
             message: format!("Failed to create REPL: {}", e),
         }
     })?;
 
+    rl.set_helper(Some(ReplHelper));
     rl.bind_sequence(KeyEvent::from('\t'), EventHandler::Simple(Cmd::Insert(1, "    ".to_string())));
-
-    let mut buffer = String::new();
+    rl.bind_sequence(KeyEvent::from('\r'), EventHandler::Conditional(Box::new(EnterHandler)));
 
     loop {
-        let prompt = if buffer.is_empty() { ">>> " } else { "... " };
-
-        match rl.readline(prompt) {
+        match rl.readline(">>> ") {
             Ok(line) => {
                 let trimmed = line.trim();
 
-                if buffer.is_empty() && (trimmed == "exit" || trimmed == "quit") {
+                if trimmed == "exit" || trimmed == "quit" {
                     break;
                 }
 
                 if trimmed.is_empty() {
-                    if !buffer.is_empty() {
-                        execute_repl_code(&mut evaluator, &scope, &buffer).await;
-                        buffer.clear();
-                    }
                     continue;
                 }
 
-                buffer.push_str(&line);
-                buffer.push('\n');
+                let clean_code = strip_continuation_prefixes(&line);
+                execute_repl_code(&mut evaluator, &scope, &clean_code).await;
             }
             Err(ReadlineError::Interrupted) => {
-                buffer.clear();
                 println!("^C");
                 continue;
             }
             Err(ReadlineError::Eof) => {
-                if !buffer.is_empty() {
-                    execute_repl_code(&mut evaluator, &scope, &buffer).await;
-                }
                 break;
             }
             Err(err) => {
