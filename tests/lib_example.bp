@@ -1,0 +1,14 @@
+PUBLIC_VALUE = 42
+_PRIVATE_VALUE = "secret"
+
+public_list = [1, 2, 3]
+_private_list = ["a", "b", "c"]
+
+def public_func():
+    return "public function result"
+
+def _private_func():
+    return "private function result"
+
+def get_public_list():
+    return public_list

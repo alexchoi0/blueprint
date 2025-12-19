@@ -1,0 +1,37 @@
+struct Point:
+    x: int
+    y: int
+
+p1 = Point(x=10, y=20)
+assert(p1.x == 10, "p1.x should be 10")
+assert(p1.y == 20, "p1.y should be 20")
+
+struct Person:
+    name: str
+    age: int
+
+p2 = Person(name="Alice", age=30)
+assert(p2.name == "Alice", "p2.name should be Alice")
+assert(p2.age == 30, "p2.age should be 30")
+
+struct Config:
+    enabled: bool
+    value: float
+
+c = Config(enabled=True, value=3.14)
+assert(c.enabled == True, "c.enabled should be True")
+assert(c.value == 3.14, "c.value should be 3.14")
+
+struct ListHolder:
+    items: list
+
+lh = ListHolder(items=[1, 2, 3])
+assert(len(lh.items) == 3, "lh.items should have 3 elements")
+
+struct DictHolder:
+    data: dict
+
+dh = DictHolder(data={"key": "value"})
+assert(dh.data["key"] == "value", "dh.data['key'] should be 'value'")
+
+print("All struct tests passed!")

@@ -1,0 +1,50 @@
+my_list = [1, 2, 3]
+assert(len(my_list) == 3, "initial length should be 3")
+
+my_list.append(4)
+assert(len(my_list) == 4, "length after append should be 4")
+assert(my_list[3] == 4, "appended element should be 4")
+
+my_list.extend([5, 6])
+assert(len(my_list) == 6, "length after extend should be 6")
+assert(my_list[4] == 5, "first extended element should be 5")
+assert(my_list[5] == 6, "second extended element should be 6")
+
+my_list.insert(0, 0)
+assert(len(my_list) == 7, "length after insert should be 7")
+assert(my_list[0] == 0, "inserted element at index 0 should be 0")
+
+popped = my_list.pop()
+assert(popped == 6, "popped element should be 6")
+assert(len(my_list) == 6, "length after pop should be 6")
+
+popped_at = my_list.pop(0)
+assert(popped_at == 0, "popped element at index 0 should be 0")
+assert(len(my_list) == 5, "length after pop(0) should be 5")
+
+my_list.remove(3)
+assert(len(my_list) == 4, "length after remove should be 4")
+
+idx = my_list.index(2)
+assert(idx == 1, "index of 2 should be 1")
+
+test_list = [1, 2, 2, 3, 2]
+cnt = test_list.count(2)
+assert(cnt == 3, "count of 2 should be 3")
+
+rev_list = [1, 2, 3]
+rev_list.reverse()
+assert(rev_list[0] == 3, "first element after reverse should be 3")
+assert(rev_list[2] == 1, "last element after reverse should be 1")
+
+original = [1, 2, 3]
+copied = original.copy()
+copied.append(4)
+assert(len(original) == 3, "original should not be modified after copy")
+assert(len(copied) == 4, "copy should have new element")
+
+clear_list = [1, 2, 3]
+clear_list.clear()
+assert(len(clear_list) == 0, "length after clear should be 0")
+
+print("All list method tests passed!")
