@@ -1,0 +1,186 @@
+def test_match_literals():
+    x = 1
+    match x:
+        case 1:
+            result = "one"
+        case 2:
+            result = "two"
+        case _:
+            result = "other"
+    assert(result == "one", "literal match failed")
+
+def test_match_variable_binding():
+    x = 42
+    match x:
+        case n:
+            result = n * 2
+    assert(result == 84, "variable binding failed")
+
+def test_match_wildcard():
+    x = "anything"
+    match x:
+        case _:
+            result = "matched"
+    assert(result == "matched", "wildcard match failed")
+
+def test_match_none():
+    x = None
+    match x:
+        case None:
+            result = "is none"
+        case _:
+            result = "not none"
+    assert(result == "is none", "None match failed")
+
+def test_match_bool():
+    x = True
+    match x:
+        case True:
+            result = "true"
+        case False:
+            result = "false"
+    assert(result == "true", "bool match failed")
+
+def test_match_string():
+    x = "hello"
+    match x:
+        case "hello":
+            result = "matched hello"
+        case "world":
+            result = "matched world"
+        case _:
+            result = "no match"
+    assert(result == "matched hello", "string match failed")
+
+def test_match_negative():
+    x = -5
+    match x:
+        case -5:
+            result = "neg five"
+        case 5:
+            result = "pos five"
+        case _:
+            result = "other"
+    assert(result == "neg five", "negative match failed")
+
+def test_match_list():
+    x = [1, 2, 3]
+    match x:
+        case [1, 2, 3]:
+            result = "exact list"
+        case [a, b, c]:
+            result = "three elements"
+        case _:
+            result = "other"
+    assert(result == "exact list", "list match failed")
+
+def test_match_list_binding():
+    x = [10, 20, 30]
+    match x:
+        case [a, b, c]:
+            result = a + b + c
+        case _:
+            result = 0
+    assert(result == 60, "list binding failed")
+
+def test_match_tuple():
+    x = (1, "two")
+    match x:
+        case (1, "two"):
+            result = "matched"
+        case _:
+            result = "no match"
+    assert(result == "matched", "tuple match failed")
+
+def test_match_tuple_binding():
+    x = ("name", 42)
+    match x:
+        case (label, value):
+            result = label + ": " + str(value)
+        case _:
+            result = "no match"
+    assert(result == "name: 42", "tuple binding failed")
+
+def test_match_or_pattern():
+    x = 2
+    match x:
+        case 1 | 2 | 3:
+            result = "one two or three"
+        case _:
+            result = "other"
+    assert(result == "one two or three", "or pattern failed")
+
+def test_match_guard():
+    x = 10
+    match x:
+        case n if n > 5:
+            result = "greater than 5"
+        case n:
+            result = "5 or less"
+    assert(result == "greater than 5", "guard failed")
+
+def test_match_guard_false():
+    x = 3
+    match x:
+        case n if n > 5:
+            result = "greater than 5"
+        case n:
+            result = "5 or less"
+    assert(result == "5 or less", "guard false case failed")
+
+def test_match_no_match():
+    x = "unmatched"
+    result = "default"
+    match x:
+        case "a":
+            result = "a"
+        case "b":
+            result = "b"
+    assert(result == "default", "no match should not change result")
+
+test_match_literals()
+print("test_match_literals passed")
+
+test_match_variable_binding()
+print("test_match_variable_binding passed")
+
+test_match_wildcard()
+print("test_match_wildcard passed")
+
+test_match_none()
+print("test_match_none passed")
+
+test_match_bool()
+print("test_match_bool passed")
+
+test_match_string()
+print("test_match_string passed")
+
+test_match_negative()
+print("test_match_negative passed")
+
+test_match_list()
+print("test_match_list passed")
+
+test_match_list_binding()
+print("test_match_list_binding passed")
+
+test_match_tuple()
+print("test_match_tuple passed")
+
+test_match_tuple_binding()
+print("test_match_tuple_binding passed")
+
+test_match_or_pattern()
+print("test_match_or_pattern passed")
+
+test_match_guard()
+print("test_match_guard passed")
+
+test_match_guard_false()
+print("test_match_guard_false passed")
+
+test_match_no_match()
+print("test_match_no_match passed")
+
+print("\nAll match tests passed!")
