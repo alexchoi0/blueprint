@@ -1089,6 +1089,10 @@ impl Evaluator {
                     None => Err(BlueprintError::KeyError { key }),
                 }
             }
+            Value::Generator(_) | Value::Iterator(_) => Err(BlueprintError::TypeError {
+                expected: "subscriptable (use list() to materialize generator first)".into(),
+                actual: target.type_name().into(),
+            }),
             _ => Err(BlueprintError::TypeError {
                 expected: "subscriptable".into(),
                 actual: target.type_name().into(),
