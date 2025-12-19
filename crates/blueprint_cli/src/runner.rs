@@ -1,7 +1,9 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, Result, Value};
+use blueprint_core::{
+    BlueprintError, PackageSpec, Result, Value, fetch_package, find_workspace_root, get_packages_dir,
+};
 use blueprint_eval::{Evaluator, Scope, triggers};
 use blueprint_parser::parse;
 use tokio::sync::Semaphore;
@@ -647,127 +649,64 @@ async fn repl_server(port: u16) -> Result<()> {
 }
 
 pub async fn install_package(package: &str) -> Result<()> {
-    let path = package.strip_prefix('@').unwrap_or(package);
-
-    let (repo_path, version) = if let Some(idx) = path.find('#') {
-        (&path[..idx], Some(&path[idx + 1..]))
-    } else {
-        (path, None)
-    };
-
-    let parts: Vec<&str> = repo_path.splitn(2, '/').collect();
-    if parts.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: "Invalid package format. Expected @user/repo or @user/repo#version".into(),
-        });
-    }
-
-    let user = parts[0];
-    let repo = parts[1];
-    let version_str = version.unwrap_or("main");
-
-    let base_dir = if let Some(workspace) = find_workspace_root() {
-        workspace.join(".blueprint").join("packages")
-    } else {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(&home).join(".blueprint").join("packages")
-    };
-
-    let package_dir = base_dir
-        .join(user)
-        .join(format!("{}#{}", repo, version_str));
+    let spec = PackageSpec::parse(package)?;
+    let packages_dir = get_packages_dir();
+    let package_dir = packages_dir.join(&spec.user).join(spec.dir_name());
 
     if package_dir.exists() {
-        println!("Package @{}/{}#{} is already installed", user, repo, version_str);
+        println!("Package {} is already installed", spec.display_name());
         return Ok(());
     }
 
-    println!("Installing @{}/{}#{}...", user, repo, version_str);
-    fetch_package(user, repo, version_str, &package_dir)?;
-    println!("Installed @{}/{}#{}", user, repo, version_str);
+    println!("Installing {}...", spec.display_name());
+    fetch_package(&spec, &package_dir)?;
+    println!("Installed {}", spec.display_name());
 
     Ok(())
 }
 
-fn find_workspace_root() -> Option<PathBuf> {
-    let mut current = std::env::current_dir().ok()?;
-    loop {
-        let bp_toml = current.join("BP.toml");
-        if bp_toml.exists() {
-            return Some(current);
-        }
-        if !current.pop() {
-            break;
-        }
-    }
-    None
-}
-
 pub async fn uninstall_package(package: &str) -> Result<()> {
-    let path = package.strip_prefix('@').unwrap_or(package);
+    let spec = PackageSpec::parse(package)?;
+    let packages_dir = get_packages_dir();
+    let user_dir = packages_dir.join(&spec.user);
 
-    let (repo_path, version) = if let Some(idx) = path.find('#') {
-        (&path[..idx], Some(&path[idx + 1..]))
-    } else {
-        (path, None)
-    };
-
-    let parts: Vec<&str> = repo_path.splitn(2, '/').collect();
-    if parts.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: "Invalid package format. Expected @user/repo or @user/repo#version".into(),
-        });
-    }
-
-    let user = parts[0];
-    let repo = parts[1];
-
-    let base_dir = if let Some(workspace) = find_workspace_root() {
-        workspace.join(".blueprint").join("packages")
-    } else {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(&home).join(".blueprint").join("packages")
-    };
-
-    let packages_dir = base_dir.join(user);
-
-    if let Some(ver) = version {
-        let package_dir = packages_dir.join(format!("{}#{}", repo, ver));
+    if spec.version != "main" {
+        let package_dir = user_dir.join(spec.dir_name());
         if package_dir.exists() {
             std::fs::remove_dir_all(&package_dir).map_err(|e| BlueprintError::IoError {
                 path: package_dir.to_string_lossy().to_string(),
                 message: e.to_string(),
             })?;
-            println!("Uninstalled @{}/{}#{}", user, repo, ver);
+            println!("Uninstalled {}", spec.display_name());
         } else {
-            println!("Package @{}/{}#{} is not installed", user, repo, ver);
+            println!("Package {} is not installed", spec.display_name());
         }
     } else {
-        if !packages_dir.exists() {
-            println!("No packages from @{}/{} are installed", user, repo);
+        if !user_dir.exists() {
+            println!("No packages from @{}/{} are installed", spec.user, spec.repo);
             return Ok(());
         }
         let mut found = false;
-        for entry in std::fs::read_dir(&packages_dir).map_err(|e| BlueprintError::IoError {
-            path: packages_dir.to_string_lossy().to_string(),
+        for entry in std::fs::read_dir(&user_dir).map_err(|e| BlueprintError::IoError {
+            path: user_dir.to_string_lossy().to_string(),
             message: e.to_string(),
         })? {
             let entry = entry.map_err(|e| BlueprintError::IoError {
-                path: packages_dir.to_string_lossy().to_string(),
+                path: user_dir.to_string_lossy().to_string(),
                 message: e.to_string(),
             })?;
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.starts_with(&format!("{}#", repo)) {
+            if name.starts_with(&format!("{}#", spec.repo)) {
                 std::fs::remove_dir_all(entry.path()).map_err(|e| BlueprintError::IoError {
                     path: entry.path().to_string_lossy().to_string(),
                     message: e.to_string(),
                 })?;
-                println!("Uninstalled @{}/{}", user, name);
+                println!("Uninstalled @{}/{}", spec.user, name);
                 found = true;
             }
         }
         if !found {
-            println!("No packages from @{}/{} are installed", user, repo);
+            println!("No packages from @{}/{} are installed", spec.user, spec.repo);
         }
     }
 
@@ -775,13 +714,11 @@ pub async fn uninstall_package(package: &str) -> Result<()> {
 }
 
 pub async fn list_packages() -> Result<()> {
-    let packages_dir = if let Some(workspace) = find_workspace_root() {
+    let packages_dir = get_packages_dir();
+
+    if let Some(workspace) = find_workspace_root() {
         println!("Packages in workspace: {}", workspace.display());
-        workspace.join(".blueprint").join("packages")
-    } else {
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        PathBuf::from(&home).join(".blueprint").join("packages")
-    };
+    }
 
     if !packages_dir.exists() {
         println!("No packages installed");
@@ -829,32 +766,6 @@ pub async fn list_packages() -> Result<()> {
             println!("{}", pkg);
         }
     }
-
-    Ok(())
-}
-
-fn fetch_package(user: &str, repo: &str, version: &str, dest: &PathBuf) -> Result<()> {
-    let repo_url = format!("https://github.com/{}/{}.git", user, repo);
-
-    let output = std::process::Command::new("git")
-        .args(["clone", "--depth", "1", "--branch", version, &repo_url])
-        .arg(dest)
-        .output()
-        .map_err(|e| BlueprintError::IoError {
-            path: repo_url.clone(),
-            message: e.to_string(),
-        })?;
-
-    if !output.status.success() {
-        std::fs::remove_dir_all(dest).ok();
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        return Err(BlueprintError::IoError {
-            path: repo_url,
-            message: format!("Failed to clone: {}", stderr.trim()),
-        });
-    }
-
-    std::fs::remove_dir_all(dest.join(".git")).ok();
 
     Ok(())
 }

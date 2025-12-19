@@ -2,7 +2,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use blueprint_core::{BlueprintError, Generator, GeneratorMessage, NativeFunction, Result, SourceLocation, StackFrame, Value};
+use blueprint_core::{
+    BlueprintError, Generator, GeneratorMessage, NativeFunction, PackageSpec, Result,
+    SourceLocation, StackFrame, Value, fetch_package, find_workspace_root_from, get_packages_dir_from,
+};
 use blueprint_parser::{
     AstExpr, AstParameter, AstStmt, AssignOp, AssignTargetP, Clause,
     ExprP, ForClause, ParameterP, ParsedModule, StmtP,
@@ -328,118 +331,36 @@ impl Evaluator {
     }
 
     fn resolve_package_path(&self, module_path: &str) -> Result<PathBuf> {
-        let path = module_path.strip_prefix('@').unwrap_or(module_path);
+        let spec = PackageSpec::parse(module_path)?;
 
-        let (repo_path, version) = if let Some(idx) = path.find('#') {
-            (&path[..idx], Some(&path[idx + 1..]))
-        } else {
-            (path, None)
-        };
-
-        let parts: Vec<&str> = repo_path.splitn(2, '/').collect();
-        if parts.len() != 2 {
-            return Err(BlueprintError::IoError {
-                path: module_path.to_string(),
-                message: "Invalid package format. Expected @user/repo or @user/repo#version".into(),
-            });
-        }
-
-        let user = parts[0];
-        let repo = parts[1];
-        let version_str = version.unwrap_or("main");
-
-        if let Some(workspace_root) = self.find_workspace_root() {
-            let package_dir = workspace_root
-                .join(".blueprint")
-                .join("packages")
-                .join(user)
-                .join(format!("{}#{}", repo, version_str));
-
-            let lib_path = package_dir.join("lib.bp");
-
-            if lib_path.exists() {
-                return Ok(lib_path);
-            }
-
-            eprintln!("Installing package @{}/{}#{}...", user, repo, version_str);
-            self.fetch_package(user, repo, version_str, &package_dir)?;
-
-            if lib_path.exists() {
-                return Ok(lib_path);
-            }
-        }
-
-        let home = std::env::var("HOME").unwrap_or_else(|_| ".".to_string());
-        let package_dir = PathBuf::from(&home)
-            .join(".blueprint")
-            .join("packages")
-            .join(user)
-            .join(format!("{}#{}", repo, version_str));
-
+        let start_dir = self.current_file.as_ref().and_then(|f| f.parent().map(|p| p.to_path_buf()));
+        let packages_dir = get_packages_dir_from(start_dir);
+        let package_dir = packages_dir.join(&spec.user).join(spec.dir_name());
         let lib_path = package_dir.join("lib.bp");
 
         if lib_path.exists() {
             return Ok(lib_path);
         }
 
-        eprintln!("Installing package @{}/{}#{}...", user, repo, version_str);
-        self.fetch_package(user, repo, version_str, &package_dir)?;
+        eprintln!("Installing package {}...", spec.display_name());
+        fetch_package(&spec, &package_dir)?;
+        eprintln!("Installed {}", spec.display_name());
 
         if lib_path.exists() {
             Ok(lib_path)
         } else {
             Err(BlueprintError::IoError {
                 path: module_path.to_string(),
-                message: format!("Package does not contain lib.bp"),
+                message: "Package does not contain lib.bp".into(),
             })
         }
     }
 
     fn find_workspace_root(&self) -> Option<PathBuf> {
-        let start_dir = if let Some(ref current_file) = self.current_file {
-            current_file.parent().map(|p| p.to_path_buf())
-        } else {
-            std::env::current_dir().ok()
-        };
-
-        let mut current = start_dir?;
-        loop {
-            let bp_toml = current.join("BP.toml");
-            if bp_toml.exists() {
-                return Some(current);
-            }
-            if !current.pop() {
-                break;
-            }
-        }
-        None
-    }
-
-    fn fetch_package(&self, user: &str, repo: &str, version: &str, dest: &PathBuf) -> Result<()> {
-        let repo_url = format!("https://github.com/{}/{}.git", user, repo);
-
-        let output = std::process::Command::new("git")
-            .args(["clone", "--depth", "1", "--branch", version, &repo_url])
-            .arg(dest)
-            .output()
-            .map_err(|e| BlueprintError::IoError {
-                path: repo_url.clone(),
-                message: e.to_string(),
-            })?;
-
-        if !output.status.success() {
-            std::fs::remove_dir_all(dest).ok();
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            return Err(BlueprintError::IoError {
-                path: repo_url,
-                message: format!("Failed to clone: {}", stderr.trim()),
-            });
-        }
-
-        std::fs::remove_dir_all(dest.join(".git")).ok();
-
-        eprintln!("Installed @{}/{}#{}", user, repo, version);
-        Ok(())
+        let start_dir = self.current_file.as_ref()
+            .and_then(|f| f.parent().map(|p| p.to_path_buf()))
+            .or_else(|| std::env::current_dir().ok())?;
+        find_workspace_root_from(start_dir)
     }
 
     fn resolve_stdlib_path(&self, module_name: &str) -> Result<PathBuf> {
