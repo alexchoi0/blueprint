@@ -106,6 +106,7 @@ async fn run_single_script(
     let module = parse(&filename, &source)?;
 
     let mut evaluator = Evaluator::new();
+    evaluator.set_file(path);
     let scope = Scope::new_global();
 
     let argv: Vec<Value> = std::iter::once(Value::String(Arc::new(filename.clone())))

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
@@ -15,6 +16,7 @@ pub struct Evaluator {
     natives: HashMap<String, Arc<NativeFunction>>,
     modules: HashMap<String, HashMap<String, Arc<NativeFunction>>>,
     codemap: Option<CodeMap>,
+    current_file: Option<PathBuf>,
 }
 
 impl Evaluator {
@@ -23,9 +25,19 @@ impl Evaluator {
             natives: HashMap::new(),
             modules: HashMap::new(),
             codemap: None,
+            current_file: None,
         };
         evaluator.register_builtins();
         evaluator
+    }
+
+    pub fn with_file(mut self, path: impl AsRef<Path>) -> Self {
+        self.current_file = Some(path.as_ref().to_path_buf());
+        self
+    }
+
+    pub fn set_file(&mut self, path: impl AsRef<Path>) {
+        self.current_file = Some(path.as_ref().to_path_buf());
     }
 
     pub fn register_native(&mut self, func: NativeFunction) {
@@ -131,10 +143,81 @@ impl Evaluator {
                 Ok(Value::None)
             }
 
-            StmtP::Load(_) => Err(BlueprintError::Unsupported {
-                message: "load() is not supported".into(),
-            }),
+            StmtP::Load(load) => {
+                self.eval_load(load, scope).await
+            }
         }
+    }
+
+    async fn eval_load(
+        &self,
+        load: &starlark_syntax::syntax::ast::LoadP<starlark_syntax::syntax::ast::AstNoPayload>,
+        scope: Arc<Scope>,
+    ) -> Result<Value> {
+        let module_path = &load.module.node;
+
+        let resolved_path = self.resolve_module_path(module_path)?;
+
+        let source = tokio::fs::read_to_string(&resolved_path)
+            .await
+            .map_err(|e| BlueprintError::IoError {
+                path: resolved_path.to_string_lossy().to_string(),
+                message: e.to_string(),
+            })?;
+
+        let filename = resolved_path.to_string_lossy().to_string();
+        let module = blueprint_parser::parse(&filename, &source)?;
+
+        let module_scope = Scope::new_global();
+
+        let abs_path = std::fs::canonicalize(&resolved_path)
+            .unwrap_or_else(|_| resolved_path.clone())
+            .to_string_lossy()
+            .to_string();
+        module_scope
+            .define("__file__", Value::String(Arc::new(abs_path)))
+            .await;
+
+        let mut module_evaluator = Evaluator::new();
+        module_evaluator.set_file(&resolved_path);
+        module_evaluator.eval(&module, module_scope.clone()).await?;
+
+        for arg in &load.args {
+            let local_name = arg.local.node.ident.as_str();
+            let their_name = &arg.their.node;
+
+            let value = module_scope.get(their_name).await.ok_or_else(|| {
+                BlueprintError::NameError {
+                    name: format!(
+                        "'{}' not found in module '{}'",
+                        their_name, module_path
+                    ),
+                }
+            })?;
+
+            scope.define(local_name, value).await;
+        }
+
+        Ok(Value::None)
+    }
+
+    fn resolve_module_path(&self, module_path: &str) -> Result<PathBuf> {
+        let current_dir = if let Some(ref current_file) = self.current_file {
+            current_file
+                .parent()
+                .map(|p| p.to_path_buf())
+                .unwrap_or_else(|| PathBuf::from("."))
+        } else {
+            PathBuf::from(".")
+        };
+
+        let resolved = if module_path.starts_with("./") || module_path.starts_with("../") {
+            current_dir.join(module_path)
+        } else {
+            current_dir.join(module_path)
+        };
+
+        Ok(resolved)
     }
 
     #[async_recursion::async_recursion]
