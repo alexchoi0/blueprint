@@ -7,24 +7,42 @@ use reqwest::Client;
 use crate::eval::Evaluator;
 
 pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("http_get", http_get));
-    evaluator.register_native(NativeFunction::new("http_post", http_post));
-    evaluator.register_native(NativeFunction::new("http_put", http_put));
-    evaluator.register_native(NativeFunction::new("http_delete", http_delete));
-    evaluator.register_native(NativeFunction::new("http_patch", http_patch));
+    evaluator.register_native(NativeFunction::new("http_request", http_request));
     evaluator.register_native(NativeFunction::new("download", download));
 }
 
-async fn http_get(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 2 {
+async fn http_request(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.is_empty() || args.len() > 4 {
         return Err(BlueprintError::ArgumentError {
-            message: format!("http_get() takes 1 or 2 arguments ({} given)", args.len()),
+            message: format!(
+                "http_request() takes 2 to 4 arguments ({} given)",
+                args.len()
+            ),
         });
     }
 
-    let url = args[0].as_string()?;
-    let headers = if args.len() == 2 {
-        extract_headers(&args[1]).await?
+    let method = args[0].as_string()?.to_uppercase();
+    let url = args[1].as_string()?;
+
+    let body = if args.len() >= 3 {
+        let v = &args[2];
+        if matches!(v, Value::None) {
+            None
+        } else {
+            Some(v.as_string()?)
+        }
+    } else {
+        kwargs.get("body").and_then(|v| {
+            if matches!(v, Value::None) {
+                None
+            } else {
+                Some(v.to_display_string())
+            }
+        })
+    };
+
+    let headers = if args.len() == 4 {
+        extract_headers(&args[3]).await?
     } else if let Some(h) = kwargs.get("headers") {
         extract_headers(h).await?
     } else {
@@ -36,121 +54,7 @@ async fn http_get(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Va
         .and_then(|v| v.as_float().ok())
         .unwrap_or(30.0);
 
-    make_request("GET", &url, None, headers, timeout).await
-}
-
-async fn http_post(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() < 1 || args.len() > 3 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("http_post() takes 1 to 3 arguments ({} given)", args.len()),
-        });
-    }
-
-    let url = args[0].as_string()?;
-    let body = if args.len() >= 2 {
-        Some(args[1].as_string()?)
-    } else {
-        kwargs.get("body").map(|v| v.to_display_string())
-    };
-
-    let headers = if args.len() == 3 {
-        extract_headers(&args[2]).await?
-    } else if let Some(h) = kwargs.get("headers") {
-        extract_headers(h).await?
-    } else {
-        HashMap::new()
-    };
-
-    let timeout = kwargs
-        .get("timeout")
-        .and_then(|v| v.as_float().ok())
-        .unwrap_or(30.0);
-
-    make_request("POST", &url, body, headers, timeout).await
-}
-
-async fn http_put(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() < 1 || args.len() > 3 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("http_put() takes 1 to 3 arguments ({} given)", args.len()),
-        });
-    }
-
-    let url = args[0].as_string()?;
-    let body = if args.len() >= 2 {
-        Some(args[1].as_string()?)
-    } else {
-        kwargs.get("body").map(|v| v.to_display_string())
-    };
-
-    let headers = if args.len() == 3 {
-        extract_headers(&args[2]).await?
-    } else if let Some(h) = kwargs.get("headers") {
-        extract_headers(h).await?
-    } else {
-        HashMap::new()
-    };
-
-    let timeout = kwargs
-        .get("timeout")
-        .and_then(|v| v.as_float().ok())
-        .unwrap_or(30.0);
-
-    make_request("PUT", &url, body, headers, timeout).await
-}
-
-async fn http_delete(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("http_delete() takes 1 or 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let url = args[0].as_string()?;
-    let headers = if args.len() == 2 {
-        extract_headers(&args[1]).await?
-    } else if let Some(h) = kwargs.get("headers") {
-        extract_headers(h).await?
-    } else {
-        HashMap::new()
-    };
-
-    let timeout = kwargs
-        .get("timeout")
-        .and_then(|v| v.as_float().ok())
-        .unwrap_or(30.0);
-
-    make_request("DELETE", &url, None, headers, timeout).await
-}
-
-async fn http_patch(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() < 1 || args.len() > 3 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("http_patch() takes 1 to 3 arguments ({} given)", args.len()),
-        });
-    }
-
-    let url = args[0].as_string()?;
-    let body = if args.len() >= 2 {
-        Some(args[1].as_string()?)
-    } else {
-        kwargs.get("body").map(|v| v.to_display_string())
-    };
-
-    let headers = if args.len() == 3 {
-        extract_headers(&args[2]).await?
-    } else if let Some(h) = kwargs.get("headers") {
-        extract_headers(h).await?
-    } else {
-        HashMap::new()
-    };
-
-    let timeout = kwargs
-        .get("timeout")
-        .and_then(|v| v.as_float().ok())
-        .unwrap_or(30.0);
-
-    make_request("PATCH", &url, body, headers, timeout).await
+    make_request(&method, &url, body, headers, timeout).await
 }
 
 async fn download(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
@@ -230,8 +134,10 @@ async fn make_request(
         "PUT" => client.put(url),
         "DELETE" => client.delete(url),
         "PATCH" => client.patch(url),
+        "HEAD" => client.head(url),
+        "OPTIONS" => client.request(reqwest::Method::OPTIONS, url),
         _ => {
-            return Err(BlueprintError::InternalError {
+            return Err(BlueprintError::ArgumentError {
                 message: format!("Unknown HTTP method: {}", method),
             })
         }

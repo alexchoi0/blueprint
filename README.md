@@ -103,14 +103,20 @@ result = run(["cmd"], cwd="/some/dir", env={"KEY": "value"})
 
 ### HTTP Requests
 ```python
-resp = http_get("https://api.example.com/data")
+resp = http_request("GET", "https://api.example.com/data")
 print(resp.status)          # 200
 print(resp.body)            # response body
 print(resp.headers)         # {"content-type": "..."}
 
-resp = http_post("https://api.example.com/data",
-                 body='{"key": "value"}',
-                 headers={"Content-Type": "application/json"})
+resp = http_request("POST", "https://api.example.com/data",
+                    body='{"key": "value"}',
+                    headers={"Content-Type": "application/json"})
+
+resp = http_request("PUT", url, body=data)
+resp = http_request("DELETE", url)
+resp = http_request("PATCH", url, body=patch_data)
+
+download("https://example.com/file.zip", "local/file.zip")
 ```
 
 ### JSON

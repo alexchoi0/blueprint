@@ -50,10 +50,10 @@ automatically yields to Tokio at I/O boundaries, enabling thousands of concurren
 │  │                                                                       │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐                │   │
 │  │  │  File I/O    │  │  HTTP        │  │  Process     │                │   │
-│  │  │  read_file   │  │  http_get    │  │  run         │                │   │
-│  │  │  write_file  │  │  http_post   │  │  shell       │                │   │
-│  │  │  glob        │  │  http_put    │  │  exec        │                │   │
-│  │  │  exists      │  │  http_delete │  │              │                │   │
+│  │  │  read_file   │  │ http_request │  │  run         │                │   │
+│  │  │  write_file  │  │  download    │  │  shell       │                │   │
+│  │  │  glob        │  │              │  │  exec        │                │   │
+│  │  │  exists      │  │              │  │              │                │   │
 │  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘                │   │
 │  │         │                 │                 │                         │   │
 │  │         │    All async    │    under the    │    hood                 │   │
@@ -143,15 +143,15 @@ For explicit parallelism within a single script:
 
 ```python
 # Sequential (slow)
-a = http_get("https://api1.com/data")
-b = http_get("https://api2.com/data")
-c = http_get("https://api3.com/data")
+a = http_request("GET", "https://api1.com/data")
+b = http_request("GET", "https://api2.com/data")
+c = http_request("GET", "https://api3.com/data")
 
 # Parallel (fast) - all three requests run concurrently
 results = parallel([
-    lambda: http_get("https://api1.com/data"),
-    lambda: http_get("https://api2.com/data"),
-    lambda: http_get("https://api3.com/data"),
+    lambda: http_request("GET", "https://api1.com/data"),
+    lambda: http_request("GET", "https://api2.com/data"),
+    lambda: http_request("GET", "https://api3.com/data"),
 ])
 a, b, c = results[0], results[1], results[2]
 ```
@@ -210,7 +210,7 @@ blueprint3/
 │   │       ├── natives/
 │   │       │   ├── mod.rs
 │   │       │   ├── file.rs    # read_file, write_file, glob, exists
-│   │       │   ├── http.rs    # http_get, http_post, http_put, http_delete
+│   │       │   ├── http.rs    # http_request, download
 │   │       │   ├── process.rs # run, shell, exec
 │   │       │   ├── parallel.rs# parallel() function
 │   │       │   ├── console.rs # print, input
@@ -252,10 +252,7 @@ blueprint3/
 
 | Function | Signature | Description |
 |----------|-----------|-------------|
-| `http_get` | `http_get(url: str, headers: dict = {}) -> Response` | HTTP GET |
-| `http_post` | `http_post(url: str, body: str, headers: dict = {}) -> Response` | HTTP POST |
-| `http_put` | `http_put(url: str, body: str, headers: dict = {}) -> Response` | HTTP PUT |
-| `http_delete` | `http_delete(url: str, headers: dict = {}) -> Response` | HTTP DELETE |
+| `http_request` | `http_request(method: str, url: str, body: str = None, headers: dict = {}) -> Response` | HTTP request (GET, POST, PUT, DELETE, PATCH, HEAD, OPTIONS) |
 | `download` | `download(url: str, path: str) -> None` | Download file |
 
 ### Process Operations
@@ -322,7 +319,7 @@ else:
 
 ### http_fetch.star
 ```python
-response = http_get("https://api.github.com/users/octocat")
+response = http_request("GET", "https://api.github.com/users/octocat")
 
 if response.status == 200:
     data = json.decode(response.body)
@@ -341,7 +338,7 @@ urls = [
 ]
 
 def fetch(url):
-    return http_get(url).body
+    return http_request("GET", url).body
 
 results = parallel([lambda u=u: fetch(u) for u in urls])
 
@@ -366,11 +363,9 @@ result = run(["docker", "push", settings["image"]])
 if result.code != 0:
     fail("Docker push failed: " + result.stderr)
 
-http_post(
-    settings["webhook_url"],
+http_request("POST", settings["webhook_url"],
     json.encode({"status": "deployed", "image": settings["image"]}),
-    headers={"Content-Type": "application/json"}
-)
+    headers={"Content-Type": "application/json"})
 
 print("Deployment complete!")
 ```
@@ -416,7 +411,7 @@ blueprint3 check script.star
 
 ### Phase 3: Native Functions
 - [ ] File I/O (read_file, write_file, etc.)
-- [ ] HTTP client (http_get, http_post, etc.)
+- [ ] HTTP client (http_request, download)
 - [ ] Process execution (run, shell)
 - [ ] parallel() function
 
