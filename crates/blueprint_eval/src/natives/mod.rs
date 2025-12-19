@@ -1,3 +1,4 @@
+mod agent;
 mod builtins;
 mod console;
 mod file;
@@ -10,6 +11,7 @@ mod time;
 use crate::eval::Evaluator;
 
 pub fn register_all(evaluator: &mut Evaluator) {
+    agent::register(evaluator);
     builtins::register(evaluator);
     console::register(evaluator);
     file::register(evaluator);
