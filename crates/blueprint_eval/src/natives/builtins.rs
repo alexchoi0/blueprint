@@ -35,6 +35,7 @@ pub fn register(evaluator: &mut Evaluator) {
     evaluator.register_native(NativeFunction::new("getattr", getattr));
     evaluator.register_native(NativeFunction::new("repr", repr));
     evaluator.register_native(NativeFunction::new("fail", fail));
+    evaluator.register_native(NativeFunction::new("exit", exit));
     evaluator.register_native(NativeFunction::new("assert_", assert_));
     evaluator.register_native(NativeFunction::new("assert_eq", assert_eq));
     evaluator.register_native(NativeFunction::new("assert_contains", assert_contains));
@@ -1055,6 +1056,28 @@ async fn fail(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value
     };
 
     Err(BlueprintError::UserError { message })
+}
+
+async fn exit(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
+    let code = if args.is_empty() {
+        0
+    } else if args.len() == 1 {
+        match &args[0] {
+            Value::Int(n) => *n as i32,
+            other => {
+                return Err(BlueprintError::TypeError {
+                    expected: "int".into(),
+                    actual: other.type_name().into(),
+                });
+            }
+        }
+    } else {
+        return Err(BlueprintError::ArgumentError {
+            message: format!("exit() takes 0 or 1 argument ({} given)", args.len()),
+        });
+    };
+
+    Err(BlueprintError::Exit { code })
 }
 
 async fn assert_(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

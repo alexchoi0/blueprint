@@ -31,7 +31,7 @@ pub async fn run_scripts(
     };
 
     let script_args = Arc::new(script_args);
-    let mut join_set: JoinSet<std::result::Result<PathBuf, (PathBuf, BlueprintError)>> =
+    let mut join_set: JoinSet<std::result::Result<(PathBuf, Option<BlueprintError>), (PathBuf, BlueprintError)>> =
         JoinSet::new();
 
     for script_path in scripts {
@@ -46,21 +46,32 @@ pub async fn run_scripts(
             };
 
             match run_single_script(&script_path, (*script_args).clone(), verbose).await {
-                Ok(()) => Ok(script_path),
-                Err(e) => Err((script_path, e)),
+                Ok(()) => Ok((script_path, None)),
+                Err(e) => {
+                    if matches!(e.inner_error(), BlueprintError::Exit { .. }) {
+                        Ok((script_path, Some(e)))
+                    } else {
+                        Err((script_path, e))
+                    }
+                }
             }
         });
     }
 
     let mut errors: Vec<(PathBuf, BlueprintError)> = vec![];
+    let mut exit_error: Option<BlueprintError> = None;
     let mut success_count = 0;
 
     while let Some(result) = join_set.join_next().await {
         match result {
-            Ok(Ok(path)) => {
-                success_count += 1;
-                if verbose {
-                    eprintln!("[OK] {}", path.display());
+            Ok(Ok((path, maybe_exit))) => {
+                if let Some(exit_err) = maybe_exit {
+                    exit_error = Some(exit_err);
+                } else {
+                    success_count += 1;
+                    if verbose {
+                        eprintln!("[OK] {}", path.display());
+                    }
                 }
             }
             Ok(Err((path, error))) => {
@@ -71,6 +82,10 @@ pub async fn run_scripts(
                 eprintln!("[PANIC] Task panicked: {}", join_error);
             }
         }
+    }
+
+    if let Some(exit_err) = exit_error {
+        return Err(exit_err);
     }
 
     if verbose {
@@ -481,7 +496,10 @@ async fn repl_interactive() -> Result<()> {
                 }
 
                 let clean_code = strip_continuation_prefixes(&line);
-                execute_repl_code(&mut evaluator, &scope, &clean_code).await;
+                if let Some(exit_err) = execute_repl_code(&mut evaluator, &scope, &clean_code).await {
+                    println!();
+                    return Err(exit_err);
+                }
             }
             Err(ReadlineError::Interrupted) => {
                 println!("^C");
@@ -501,12 +519,22 @@ async fn repl_interactive() -> Result<()> {
     Ok(())
 }
 
-async fn execute_repl_code(evaluator: &mut Evaluator, scope: &Arc<Scope>, code: &str) {
+async fn execute_repl_code(evaluator: &mut Evaluator, scope: &Arc<Scope>, code: &str) -> Option<BlueprintError> {
     let result = eval_code_in_scope(evaluator, scope, code).await;
     match result {
-        Ok(Some(value)) => println!("{}", value),
-        Ok(None) => {}
-        Err(e) => eprintln!("error: {}", e.format_with_stack()),
+        Ok(Some(value)) => {
+            println!("{}", value);
+            None
+        }
+        Ok(None) => None,
+        Err(e) => {
+            if matches!(e.inner_error(), BlueprintError::Exit { .. }) {
+                Some(e)
+            } else {
+                eprintln!("error: {}", e.format_with_stack());
+                None
+            }
+        }
     }
 }
 

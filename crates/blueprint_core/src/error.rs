@@ -145,6 +145,9 @@ pub enum BlueprintError {
     #[error("return")]
     Return { value: Arc<crate::Value> },
 
+    #[error("exit with code {code}")]
+    Exit { code: i32 },
+
     #[error("{error}")]
     WithStack {
         error: Box<BlueprintError>,
@@ -170,7 +173,7 @@ impl BlueprintError {
     pub fn is_control_flow(&self) -> bool {
         matches!(
             self,
-            BlueprintError::Break | BlueprintError::Continue | BlueprintError::Return { .. }
+            BlueprintError::Break | BlueprintError::Continue | BlueprintError::Return { .. } | BlueprintError::Exit { .. }
         )
     }
 

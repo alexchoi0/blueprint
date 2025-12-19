@@ -2,6 +2,7 @@ mod args;
 mod runner;
 mod workspace;
 
+use blueprint_core::BlueprintError;
 use clap::Parser;
 use tokio::runtime::Builder;
 
@@ -42,7 +43,20 @@ fn main() {
     });
 
     if let Err(e) = result {
-        eprintln!("error: {}", e);
-        std::process::exit(1);
+        let exit_code = extract_exit_code(&e);
+        if exit_code == 0 {
+            std::process::exit(0);
+        }
+        if !matches!(e.inner_error(), BlueprintError::Exit { .. }) {
+            eprintln!("error: {}", e);
+        }
+        std::process::exit(exit_code);
+    }
+}
+
+fn extract_exit_code(e: &BlueprintError) -> i32 {
+    match e.inner_error() {
+        BlueprintError::Exit { code } => *code,
+        _ => 1,
     }
 }
