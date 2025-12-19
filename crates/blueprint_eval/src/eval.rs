@@ -212,6 +212,157 @@ impl Evaluator {
             StmtP::Struct(struct_def) => {
                 self.eval_struct_def(struct_def, scope).await
             }
+
+            StmtP::Match(match_stmt) => {
+                self.eval_match(match_stmt, scope).await
+            }
+        }
+    }
+
+    async fn eval_match(
+        &self,
+        match_stmt: &starlark_syntax::syntax::ast::MatchP<starlark_syntax::syntax::ast::AstNoPayload>,
+        scope: Arc<Scope>,
+    ) -> Result<Value> {
+        let subject = self.eval_expr(&match_stmt.subject, scope.clone()).await?;
+
+        for case in &match_stmt.cases {
+            let pattern_scope = Scope::new_child(scope.clone(), ScopeKind::Block);
+
+            if self.match_pattern(&case.node.pattern, &subject, &pattern_scope).await? {
+                if let Some(ref guard) = case.node.guard {
+                    let guard_val = self.eval_expr(guard, pattern_scope.clone()).await?;
+                    if !guard_val.is_truthy() {
+                        continue;
+                    }
+                }
+
+                let bound_vars = pattern_scope.variables_snapshot().await;
+                for (name, value) in bound_vars {
+                    scope.define(&name, value).await;
+                }
+
+                return self.eval_stmt(&case.node.body, scope.clone()).await;
+            }
+        }
+
+        Ok(Value::None)
+    }
+
+    #[async_recursion::async_recursion]
+    async fn match_pattern(
+        &self,
+        pattern: &AstExpr,
+        subject: &Value,
+        scope: &Arc<Scope>,
+    ) -> Result<bool> {
+        match &pattern.node {
+            ExprP::Identifier(ident) => {
+                let name = ident.node.ident.as_str();
+                match name {
+                    "_" => Ok(true),
+                    "None" => Ok(matches!(subject, Value::None)),
+                    "True" => Ok(matches!(subject, Value::Bool(true))),
+                    "False" => Ok(matches!(subject, Value::Bool(false))),
+                    _ => {
+                        scope.define(name, subject.clone()).await;
+                        Ok(true)
+                    }
+                }
+            }
+
+            ExprP::Literal(lit) => {
+                let pattern_val = self.eval_literal(lit)?;
+                Ok(pattern_val == *subject)
+            }
+
+            ExprP::Minus(inner) => {
+                let pattern_val = self.eval_literal_negated(inner)?;
+                Ok(pattern_val == *subject)
+            }
+
+            ExprP::List(patterns) => {
+                match subject {
+                    Value::List(l) => {
+                        let items = l.read().await;
+                        if items.len() != patterns.len() {
+                            return Ok(false);
+                        }
+                        for (pat, item) in patterns.iter().zip(items.iter()) {
+                            if !self.match_pattern(pat, item, scope).await? {
+                                return Ok(false);
+                            }
+                        }
+                        Ok(true)
+                    }
+                    _ => Ok(false),
+                }
+            }
+
+            ExprP::Tuple(patterns) => {
+                match subject {
+                    Value::Tuple(t) => {
+                        if t.len() != patterns.len() {
+                            return Ok(false);
+                        }
+                        for (pat, item) in patterns.iter().zip(t.iter()) {
+                            if !self.match_pattern(pat, item, scope).await? {
+                                return Ok(false);
+                            }
+                        }
+                        Ok(true)
+                    }
+                    _ => Ok(false),
+                }
+            }
+
+            ExprP::Dict(pairs) => {
+                match subject {
+                    Value::Dict(d) => {
+                        let map = d.read().await;
+                        if map.len() != pairs.len() {
+                            return Ok(false);
+                        }
+                        for (key_pat, val_pat) in pairs {
+                            let key = self.eval_expr(key_pat, scope.clone()).await?;
+                            let key_str = self.value_to_dict_key(&key)?;
+                            match map.get(&key_str) {
+                                Some(val) => {
+                                    if !self.match_pattern(val_pat, val, scope).await? {
+                                        return Ok(false);
+                                    }
+                                }
+                                None => return Ok(false),
+                            }
+                        }
+                        Ok(true)
+                    }
+                    _ => Ok(false),
+                }
+            }
+
+            ExprP::Op(lhs, BinOp::BitOr, rhs) => {
+                if self.match_pattern(lhs, subject, scope).await? {
+                    return Ok(true);
+                }
+                self.match_pattern(rhs, subject, scope).await
+            }
+
+            _ => Err(BlueprintError::ValueError {
+                message: format!("unsupported pattern type"),
+            }),
+        }
+    }
+
+    fn eval_literal_negated(&self, expr: &AstExpr) -> Result<Value> {
+        match &expr.node {
+            ExprP::Literal(lit) => {
+                let val = self.eval_literal(lit)?;
+                self.eval_unary_minus(val)
+            }
+            _ => Err(BlueprintError::ValueError {
+                message: "invalid negated literal pattern".into(),
+            }),
         }
     }
 
@@ -2087,6 +2238,7 @@ impl Evaluator {
             StmtP::AssignModify(_, _, expr) => Self::expr_contains_yield(expr),
             StmtP::Return(Some(expr)) => Self::expr_contains_yield(expr),
             StmtP::Def(def) => Self::contains_yield(&def.body),
+            StmtP::Match(m) => m.cases.iter().any(|c| Self::contains_yield(&c.node.body)),
             _ => false,
         }
     }

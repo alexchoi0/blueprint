@@ -169,6 +169,25 @@ impl Checker {
                 }
             }
 
+            StmtP::Match(match_stmt) => {
+                self.check_expr(&match_stmt.subject, scope);
+
+                for case in &match_stmt.cases {
+                    let mut case_scope = scope.child();
+                    self.check_pattern(&case.node.pattern, &mut case_scope);
+
+                    if let Some(ref guard) = case.node.guard {
+                        self.check_expr(guard, &case_scope);
+                    }
+
+                    self.check_stmt(&case.node.body, &mut case_scope);
+
+                    for name in &case_scope.defined {
+                        scope.define(name.clone());
+                    }
+                }
+            }
+
             StmtP::Break | StmtP::Continue | StmtP::Pass => {}
         }
     }
@@ -398,6 +417,59 @@ impl Checker {
                 for t in targets {
                     self.check_assign_target(t, scope);
                 }
+            }
+        }
+    }
+
+    fn check_pattern(&mut self, pattern: &AstExpr, scope: &mut CheckScope) {
+        match &pattern.node {
+            ExprP::Identifier(ident) => {
+                let name = ident.node.ident.as_str();
+                if name != "_" && name != "None" && name != "True" && name != "False" {
+                    scope.define(name.to_string());
+                }
+            }
+
+            ExprP::Literal(_) => {}
+
+            ExprP::Minus(inner) => {
+                if !matches!(&inner.node, ExprP::Literal(_)) {
+                    self.errors.push(CheckerError {
+                        message: "invalid pattern: negation only allowed on literals".to_string(),
+                        location: self.get_location(&pattern.span),
+                    });
+                }
+            }
+
+            ExprP::List(patterns) => {
+                for pat in patterns {
+                    self.check_pattern(pat, scope);
+                }
+            }
+
+            ExprP::Tuple(patterns) => {
+                for pat in patterns {
+                    self.check_pattern(pat, scope);
+                }
+            }
+
+            ExprP::Dict(pairs) => {
+                for (key, val) in pairs {
+                    self.check_expr(key, scope);
+                    self.check_pattern(val, scope);
+                }
+            }
+
+            ExprP::Op(lhs, starlark_syntax::syntax::ast::BinOp::BitOr, rhs) => {
+                self.check_pattern(lhs, scope);
+                self.check_pattern(rhs, scope);
+            }
+
+            _ => {
+                self.errors.push(CheckerError {
+                    message: "unsupported pattern type".to_string(),
+                    location: self.get_location(&pattern.span),
+                });
             }
         }
     }
