@@ -11,10 +11,11 @@ resolver = "2"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+repository = "https://github.com/alexchoi0/blueprint"
 
 [workspace.dependencies]
-blueprint-starlark = { path = "../blueprint-starlark/starlark" }
-blueprint-starlark-syntax = { path = "../blueprint-starlark/starlark_syntax" }
+blueprint-starlark = "0.13.0"
+blueprint-starlark-syntax = "0.13.0"
 tokio = { version = "1.35", features = ["full"] }
 thiserror = "1.0"
 anyhow = "1.0"

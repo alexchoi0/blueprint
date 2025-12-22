@@ -3,6 +3,7 @@ name = "blueprint3"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "High-performance Starlark script executor with implicit async I/O"
 
 [[bin]]

@@ -3,6 +3,7 @@ name = "blueprint-engine-parser"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
+repository.workspace = true
 description = "Starlark parser for Blueprint3"
 
 [dependencies]
