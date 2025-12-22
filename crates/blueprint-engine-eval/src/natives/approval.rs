@@ -4,7 +4,7 @@ use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 

@@ -3,7 +3,7 @@ use indexmap::{IndexMap, IndexSet};
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};
 
-use blueprint_core::{BlueprintError, Generator, GeneratorMessage, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, Generator, GeneratorMessage, NativeFunction, Result, Value};
 
 use crate::eval::Evaluator;
 use crate::scope::{Scope, ScopeKind};
@@ -627,7 +627,7 @@ async fn call_func(func: &Value, args: Vec<Value>) -> Result<Value> {
         Value::Lambda(lambda) => {
             let body = lambda
                 .body
-                .downcast_ref::<blueprint_parser::AstExpr>()
+                .downcast_ref::<blueprint_engine_parser::AstExpr>()
                 .ok_or_else(|| BlueprintError::InternalError {
                     message: "Invalid lambda body".into(),
                 })?;
@@ -653,7 +653,7 @@ async fn call_func(func: &Value, args: Vec<Value>) -> Result<Value> {
         Value::Function(func) => {
             let body = func
                 .body
-                .downcast_ref::<blueprint_parser::AstStmt>()
+                .downcast_ref::<blueprint_engine_parser::AstStmt>()
                 .ok_or_else(|| BlueprintError::InternalError {
                     message: "Invalid function body".into(),
                 })?;

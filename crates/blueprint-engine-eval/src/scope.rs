@@ -1,4 +1,4 @@
-use blueprint_core::{GeneratorMessage, Value};
+use blueprint_engine_core::{GeneratorMessage, Value};
 use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::{mpsc, RwLock};

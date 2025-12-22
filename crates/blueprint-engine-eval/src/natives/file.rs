@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;

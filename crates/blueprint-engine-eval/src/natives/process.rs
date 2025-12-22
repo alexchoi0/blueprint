@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, NativeFunction, ProcessResult, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, ProcessResult, Result, Value};
 use tokio::process::Command;
 
 use crate::eval::Evaluator;

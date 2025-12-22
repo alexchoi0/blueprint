@@ -1,8 +1,8 @@
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use blueprint_core::SourceLocation;
-use blueprint_parser::{
+use blueprint_engine_core::SourceLocation;
+use blueprint_engine_parser::{
     AstExpr, AstParameter, AstStmt, AssignTargetP, Clause, ExprP, ForClause, ParameterP, StmtP,
 };
 use starlark_syntax::codemap::CodeMap;
@@ -48,7 +48,7 @@ impl Checker {
         self
     }
 
-    pub fn check(&mut self, module: &blueprint_parser::ParsedModule) -> Vec<CheckerError> {
+    pub fn check(&mut self, module: &blueprint_engine_parser::ParsedModule) -> Vec<CheckerError> {
         self.codemap = Some(module.codemap.clone());
         self.errors.clear();
 
@@ -578,7 +578,7 @@ impl Checker {
 
     fn get_location(&self, span: &starlark_syntax::codemap::Span) -> SourceLocation {
         if let Some(ref codemap) = self.codemap {
-            blueprint_parser::get_location(codemap, *span)
+            blueprint_engine_parser::get_location(codemap, *span)
         } else {
             SourceLocation {
                 file: self.current_file.as_ref().map(|p| p.to_string_lossy().to_string()),

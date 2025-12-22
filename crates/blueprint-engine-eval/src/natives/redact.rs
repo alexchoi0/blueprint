@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_core::{NativeFunction, Result, Value};
+use blueprint_engine_core::{NativeFunction, Result, Value};
 use regex::Regex;
 use once_cell::sync::Lazy;
 
@@ -149,7 +149,7 @@ fn find_high_entropy_strings(text: &str, threshold: f64, min_len: usize) -> Vec<
 
 async fn redact_pii(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
     if args.len() != 1 {
-        return Err(blueprint_core::BlueprintError::ArgumentError {
+        return Err(blueprint_engine_core::BlueprintError::ArgumentError {
             message: format!("redact_pii() takes exactly 1 argument ({} given)", args.len()),
         });
     }
@@ -195,7 +195,7 @@ async fn redact_pii(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<
 
 async fn redact_secrets(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
     if args.len() != 1 {
-        return Err(blueprint_core::BlueprintError::ArgumentError {
+        return Err(blueprint_engine_core::BlueprintError::ArgumentError {
             message: format!("redact_secrets() takes exactly 1 argument ({} given)", args.len()),
         });
     }

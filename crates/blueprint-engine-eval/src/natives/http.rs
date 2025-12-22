@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, HttpResponse, NativeFunction, Result, StreamIterator, Value};
+use blueprint_engine_core::{BlueprintError, HttpResponse, NativeFunction, Result, StreamIterator, Value};
 use futures_util::StreamExt;
 use reqwest::Client;
 use tokio::sync::mpsc;

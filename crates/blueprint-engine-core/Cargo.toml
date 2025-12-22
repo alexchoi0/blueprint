@@ -1,5 +1,5 @@
 [package]
-name = "blueprint_core"
+name = "blueprint-engine-core"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

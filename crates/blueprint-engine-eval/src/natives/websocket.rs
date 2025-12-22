@@ -10,7 +10,7 @@ use axum::{
     routing::get,
     Router,
 };
-use blueprint_core::{BlueprintError, NativeFunction, Result, StreamIterator, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, StreamIterator, Value};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};

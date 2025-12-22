@@ -1,4 +1,4 @@
-use blueprint_core::{BlueprintError, Result, SourceLocation, Span};
+use blueprint_engine_core::{BlueprintError, Result, SourceLocation, Span};
 use starlark_syntax::codemap::CodeMap;
 use starlark_syntax::dialect::{Dialect, DialectTypes};
 use starlark_syntax::syntax::module::AstModuleFields;

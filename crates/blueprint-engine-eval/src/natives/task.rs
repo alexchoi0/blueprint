@@ -3,7 +3,7 @@ use indexmap::IndexMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
@@ -90,7 +90,7 @@ async fn execute_callable(func_value: Value) -> Result<Value> {
         Value::Lambda(lambda) => {
             let body = lambda
                 .body
-                .downcast_ref::<blueprint_parser::AstExpr>()
+                .downcast_ref::<blueprint_engine_parser::AstExpr>()
                 .ok_or_else(|| BlueprintError::InternalError {
                     message: "Invalid lambda body in task()".into(),
                 })?;
@@ -116,7 +116,7 @@ async fn execute_callable(func_value: Value) -> Result<Value> {
         Value::Function(func) => {
             let body = func
                 .body
-                .downcast_ref::<blueprint_parser::AstStmt>()
+                .downcast_ref::<blueprint_engine_parser::AstStmt>()
                 .ok_or_else(|| BlueprintError::InternalError {
                     message: "Invalid function body in task()".into(),
                 })?;

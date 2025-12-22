@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 
@@ -52,7 +52,7 @@ async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
                 join_set.spawn(async move {
                     let body = lambda
                         .body
-                        .downcast_ref::<blueprint_parser::AstExpr>()
+                        .downcast_ref::<blueprint_engine_parser::AstExpr>()
                         .ok_or_else(|| {
                             (
                                 idx,
@@ -89,7 +89,7 @@ async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
                 join_set.spawn(async move {
                     let body = func
                         .body
-                        .downcast_ref::<blueprint_parser::AstStmt>()
+                        .downcast_ref::<blueprint_engine_parser::AstStmt>()
                         .ok_or_else(|| {
                             (
                                 idx,

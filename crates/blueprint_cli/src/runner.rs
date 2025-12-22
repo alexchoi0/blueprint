@@ -1,11 +1,11 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use blueprint_core::{
+use blueprint_engine_core::{
     BlueprintError, PackageSpec, Result, Value, fetch_package, find_workspace_root, get_packages_dir,
 };
-use blueprint_eval::{Checker, Evaluator, Scope, triggers};
-use blueprint_parser::parse;
+use blueprint_engine_eval::{Checker, Evaluator, Scope, triggers};
+use blueprint_engine_parser::parse;
 use tokio::sync::Semaphore;
 use tokio::task::JoinSet;
 

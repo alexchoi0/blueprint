@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use blueprint_core::{BlueprintError, Result};
+use blueprint_engine_core::{BlueprintError, Result};
 
 #[derive(Debug, Deserialize, Serialize, Default)]
 pub struct BpToml {

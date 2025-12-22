@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "crates/blueprint_core",
-    "crates/blueprint_parser",
-    "crates/blueprint_eval",
+    "crates/blueprint-engine-core",
+    "crates/blueprint-engine-parser",
+    "crates/blueprint-engine-eval",
     "crates/blueprint_cli",
 ]
 resolver = "2"
@@ -10,7 +10,7 @@ resolver = "2"
 [workspace.package]
 version = "0.1.0"
 edition = "2021"
-license = "MIT"
+license = "MIT OR Apache-2.0"
 
 [workspace.dependencies]
 starlark = { path = "../blueprint-starlark/starlark" }
@@ -30,6 +30,6 @@ regex = "1.10"
 once_cell = "1.19"
 axum = "0.7"
 
-blueprint_core = { path = "crates/blueprint_core" }
-blueprint_parser = { path = "crates/blueprint_parser" }
-blueprint_eval = { path = "crates/blueprint_eval" }
+blueprint-engine-core = { path = "crates/blueprint-engine-core" }
+blueprint-engine-parser = { path = "crates/blueprint-engine-parser" }
+blueprint-engine-eval = { path = "crates/blueprint-engine-eval" }

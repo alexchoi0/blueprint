@@ -1,13 +1,13 @@
 [package]
-name = "blueprint_eval"
+name = "blueprint-engine-eval"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Async evaluator for Blueprint3"
 
 [dependencies]
-blueprint_core.workspace = true
-blueprint_parser.workspace = true
+blueprint-engine-core.workspace = true
+blueprint-engine-parser.workspace = true
 starlark_syntax.workspace = true
 tokio = { workspace = true, features = ["sync", "rt-multi-thread", "fs", "process", "io-std", "io-util", "time"] }
 reqwest = { workspace = true }

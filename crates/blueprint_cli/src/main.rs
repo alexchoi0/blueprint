@@ -2,7 +2,7 @@ mod args;
 mod runner;
 mod workspace;
 
-use blueprint_core::BlueprintError;
+use blueprint_engine_core::BlueprintError;
 use clap::Parser;
 use tokio::runtime::Builder;
 

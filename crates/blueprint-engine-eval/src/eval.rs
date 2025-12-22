@@ -3,12 +3,12 @@ use indexmap::{IndexMap, IndexSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
 
-use blueprint_core::{
+use blueprint_engine_core::{
     BlueprintError, Generator, GeneratorMessage, NativeFunction, PackageSpec, Result,
     SourceLocation, StackFrame, StructField, StructType, TypeAnnotation, Value,
     fetch_package, find_workspace_root_from, get_packages_dir_from,
 };
-use blueprint_parser::{
+use blueprint_engine_parser::{
     AstExpr, AstParameter, AstStmt, AssignOp, AssignTargetP, Clause,
     ExprP, ForClause, ParameterP, ParsedModule, StmtP,
 };
@@ -73,7 +73,7 @@ impl Evaluator {
     }
 
     #[async_recursion::async_recursion]
-    pub async fn eval_stmt(&self, stmt: &blueprint_parser::AstStmt, scope: Arc<Scope>) -> Result<Value> {
+    pub async fn eval_stmt(&self, stmt: &blueprint_engine_parser::AstStmt, scope: Arc<Scope>) -> Result<Value> {
         match &stmt.node {
             StmtP::Statements(stmts) => {
                 let mut result = Value::None;
@@ -599,7 +599,7 @@ impl Evaluator {
             })?;
 
         let filename = resolved_path.to_string_lossy().to_string();
-        let module = blueprint_parser::parse(&filename, &source)?;
+        let module = blueprint_engine_parser::parse(&filename, &source)?;
 
         let module_scope = Scope::new_global();
         module_scope
@@ -1803,7 +1803,7 @@ impl Evaluator {
 
     async fn eval_call_args(
         &self,
-        args: &[blueprint_parser::AstArgument],
+        args: &[blueprint_engine_parser::AstArgument],
         scope: Arc<Scope>,
     ) -> Result<(Vec<Value>, HashMap<String, Value>)> {
         let mut positional = Vec::new();
@@ -1866,7 +1866,7 @@ impl Evaluator {
 
     async fn call_user_function(
         &self,
-        func: &blueprint_core::UserFunction,
+        func: &blueprint_engine_core::UserFunction,
         args: Vec<Value>,
         kwargs: HashMap<String, Value>,
         _parent_scope: Arc<Scope>,
@@ -1905,7 +1905,7 @@ impl Evaluator {
 
     async fn create_generator(
         &self,
-        func: &blueprint_core::UserFunction,
+        func: &blueprint_engine_core::UserFunction,
         args: Vec<Value>,
         kwargs: HashMap<String, Value>,
     ) -> Result<Value> {
@@ -1945,7 +1945,7 @@ impl Evaluator {
 
     async fn call_lambda(
         &self,
-        func: &blueprint_core::LambdaFunction,
+        func: &blueprint_engine_core::LambdaFunction,
         args: Vec<Value>,
         kwargs: HashMap<String, Value>,
         _parent_scope: Arc<Scope>,
@@ -1977,7 +1977,7 @@ impl Evaluator {
 
     pub async fn call_lambda_public(
         &self,
-        func: &blueprint_core::LambdaFunction,
+        func: &blueprint_engine_core::LambdaFunction,
         args: Vec<Value>,
         kwargs: HashMap<String, Value>,
     ) -> Result<Value> {
@@ -1987,7 +1987,7 @@ impl Evaluator {
 
     pub async fn call_function_public(
         &self,
-        func: &blueprint_core::UserFunction,
+        func: &blueprint_engine_core::UserFunction,
         args: Vec<Value>,
         kwargs: HashMap<String, Value>,
     ) -> Result<Value> {
@@ -1997,7 +1997,7 @@ impl Evaluator {
 
     async fn bind_parameters(
         &self,
-        params: &[blueprint_core::Parameter],
+        params: &[blueprint_engine_core::Parameter],
         args: Vec<Value>,
         mut kwargs: HashMap<String, Value>,
         scope: &Arc<Scope>,
@@ -2006,7 +2006,7 @@ impl Evaluator {
 
         for param in params {
             match param.kind {
-                blueprint_core::ParameterKind::Positional => {
+                blueprint_engine_core::ParameterKind::Positional => {
                     let value = if arg_idx < args.len() {
                         let v = args[arg_idx].clone();
                         arg_idx += 1;
@@ -2022,14 +2022,14 @@ impl Evaluator {
                     };
                     scope.define(&param.name, value).await;
                 }
-                blueprint_core::ParameterKind::Args => {
+                blueprint_engine_core::ParameterKind::Args => {
                     let remaining: Vec<Value> = args[arg_idx..].to_vec();
                     scope
                         .define(&param.name, Value::List(Arc::new(tokio::sync::RwLock::new(remaining))))
                         .await;
                     arg_idx = args.len();
                 }
-                blueprint_core::ParameterKind::Kwargs => {
+                blueprint_engine_core::ParameterKind::Kwargs => {
                     let remaining: IndexMap<String, Value> = std::mem::take(&mut kwargs).into_iter().collect();
                     scope
                         .define(&param.name, Value::Dict(Arc::new(tokio::sync::RwLock::new(remaining))))
@@ -2065,7 +2065,7 @@ impl Evaluator {
     ) -> Result<Value> {
         let params = self.convert_params(&def.params)?;
 
-        let func = blueprint_core::UserFunction {
+        let func = blueprint_engine_core::UserFunction {
             name: def.name.node.ident.clone(),
             params,
             body: Box::new((*def.body).clone()),
@@ -2082,7 +2082,7 @@ impl Evaluator {
     ) -> Result<Value> {
         let params = self.convert_params(&lambda.params)?;
 
-        let func = blueprint_core::LambdaFunction {
+        let func = blueprint_engine_core::LambdaFunction {
             params,
             body: Box::new((*lambda.body).clone()),
             closure: Some(Arc::new(scope) as Arc<dyn std::any::Any + Send + Sync>),
@@ -2091,7 +2091,7 @@ impl Evaluator {
         Ok(Value::Lambda(Arc::new(func)))
     }
 
-    fn convert_params(&self, params: &[AstParameter]) -> Result<Vec<blueprint_core::Parameter>> {
+    fn convert_params(&self, params: &[AstParameter]) -> Result<Vec<blueprint_engine_core::Parameter>> {
         let mut result = Vec::new();
 
         for param in params {
@@ -2102,24 +2102,24 @@ impl Evaluator {
                     } else {
                         None
                     };
-                    result.push(blueprint_core::Parameter {
+                    result.push(blueprint_engine_core::Parameter {
                         name: ident.node.ident.clone(),
                         default: default_val,
-                        kind: blueprint_core::ParameterKind::Positional,
+                        kind: blueprint_engine_core::ParameterKind::Positional,
                     });
                 }
                 ParameterP::Args(ident, _type_ann) => {
-                    result.push(blueprint_core::Parameter {
+                    result.push(blueprint_engine_core::Parameter {
                         name: ident.node.ident.clone(),
                         default: None,
-                        kind: blueprint_core::ParameterKind::Args,
+                        kind: blueprint_engine_core::ParameterKind::Args,
                     });
                 }
                 ParameterP::KwArgs(ident, _type_ann) => {
-                    result.push(blueprint_core::Parameter {
+                    result.push(blueprint_engine_core::Parameter {
                         name: ident.node.ident.clone(),
                         default: None,
-                        kind: blueprint_core::ParameterKind::Kwargs,
+                        kind: blueprint_engine_core::ParameterKind::Kwargs,
                     });
                 }
                 ParameterP::NoArgs | ParameterP::Slash => {}

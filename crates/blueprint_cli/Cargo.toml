@@ -10,9 +10,9 @@ name = "bp"
 path = "src/main.rs"
 
 [dependencies]
-blueprint_core.workspace = true
-blueprint_parser.workspace = true
-blueprint_eval.workspace = true
+blueprint-engine-core.workspace = true
+blueprint-engine-parser.workspace = true
+blueprint-engine-eval.workspace = true
 tokio.workspace = true
 clap.workspace = true
 glob.workspace = true

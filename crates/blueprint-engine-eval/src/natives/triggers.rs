@@ -10,7 +10,7 @@ use axum::{
     routing::{delete, get, head, patch, post, put},
     Router,
 };
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::{oneshot, RwLock};
 use tokio_cron_scheduler::{Job, JobScheduler};
 use uuid::Uuid;

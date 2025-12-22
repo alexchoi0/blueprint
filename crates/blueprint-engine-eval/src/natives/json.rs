@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use indexmap::IndexMap;
 use std::sync::Arc;
 
-use blueprint_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use serde_json;
 use tokio::sync::RwLock;
 
