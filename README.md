@@ -25,10 +25,10 @@ Blueprint lets you write simple, synchronous-looking scripts while the runtime a
 
 ```bash
 # From source
-cargo install --git https://github.com/alexchoi0/blueprint --bin bp
+cargo install blueprint-engine --bin bp
 
 # Or build locally
-git clone https://github.com/alexchoi0/blueprint.git
+git clone https://github.com/alexchoi0/blueprint-engine.git
 cd blueprint
 cargo build --release
 cp target/release/bp /usr/local/bin/
