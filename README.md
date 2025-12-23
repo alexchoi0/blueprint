@@ -1,4 +1,4 @@
-# Blueprint
+# Blueprint Engine
 
 A high-performance Starlark script executor with implicit async I/O, built on Tokio.
 
