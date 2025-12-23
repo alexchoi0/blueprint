@@ -41,9 +41,9 @@ async fn random_bytes_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Re
     if output_hex {
         Ok(Value::String(Arc::new(hex::encode(&bytes))))
     } else {
-        let encoded =
-            base64::Engine::encode(&base64::engine::general_purpose::STANDARD, &bytes);
-        Ok(Value::String(Arc::new(encoded)))
+        // Return raw bytes as a string (each byte as a character)
+        let s: String = bytes.into_iter().map(|b| b as char).collect();
+        Ok(Value::String(Arc::new(s)))
     }
 }
 

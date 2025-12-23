@@ -2,7 +2,6 @@ mod approval;
 mod builtins;
 mod console;
 mod crypto;
-mod encoding;
 mod file;
 mod http;
 mod json;
@@ -16,7 +15,6 @@ mod socket;
 mod task;
 mod time;
 pub mod triggers;
-mod uuid;
 mod websocket;
 
 use crate::eval::Evaluator;
@@ -26,7 +24,6 @@ pub fn register_all(evaluator: &mut Evaluator) {
     builtins::register(evaluator);
     console::register(evaluator);
     crypto::register(evaluator);
-    encoding::register(evaluator);
     file::register(evaluator);
     http::register(evaluator);
     json::register(evaluator);
@@ -40,6 +37,5 @@ pub fn register_all(evaluator: &mut Evaluator) {
     task::register(evaluator);
     time::register(evaluator);
     triggers::register(evaluator);
-    uuid::register(evaluator);
     websocket::register(evaluator);
 }

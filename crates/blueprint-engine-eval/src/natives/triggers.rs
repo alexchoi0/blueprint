@@ -13,9 +13,14 @@ use axum::{
 use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::{oneshot, RwLock};
 use tokio_cron_scheduler::{Job, JobScheduler};
-use uuid::Uuid;
 
 use crate::eval::Evaluator;
+
+fn random_id() -> String {
+    use rand::Rng;
+    let bytes: [u8; 4] = rand::thread_rng().gen();
+    hex::encode(bytes)
+}
 
 lazy_static::lazy_static! {
     pub static ref TRIGGER_REGISTRY: Arc<RwLock<TriggerRegistry>> = Arc::new(RwLock::new(TriggerRegistry::new()));
@@ -184,7 +189,7 @@ async fn http_server_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         }
     };
 
-    let id = format!("http-{}", Uuid::new_v4().to_string().split('-').next().unwrap());
+    let id = format!("http-{}", random_id());
     let running = Arc::new(RwLock::new(true));
 
     let mut router = Router::new();
@@ -433,7 +438,7 @@ async fn cron_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 
     let schedule = normalize_cron_schedule(&schedule_input);
 
-    let id = format!("cron-{}", Uuid::new_v4().to_string().split('-').next().unwrap());
+    let id = format!("cron-{}", random_id());
     let running = Arc::new(RwLock::new(true));
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
@@ -495,7 +500,7 @@ async fn interval_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Resul
     let seconds = args[0].as_int()? as u64;
     let handler = args[1].clone();
 
-    let id = format!("interval-{}", Uuid::new_v4().to_string().split('-').next().unwrap());
+    let id = format!("interval-{}", random_id());
     let running = Arc::new(RwLock::new(true));
 
     let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
