@@ -12,7 +12,7 @@ automatically yields to Tokio at I/O boundaries, enabling thousands of concurren
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                            BLUEPRINT Engine                                 │
+│                            BLUEPRINT ENGINE                                 │
 │                     Implicit Async Starlark Runtime                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
