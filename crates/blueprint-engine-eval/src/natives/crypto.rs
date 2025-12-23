@@ -7,22 +7,19 @@ use md5::Md5;
 use sha1::Sha1;
 use sha2::{Digest, Sha256, Sha512};
 
-use crate::eval::Evaluator;
-
 type HmacSha256 = Hmac<Sha256>;
 type HmacSha512 = Hmac<Sha512>;
 
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("md5", md5_fn));
-    evaluator.register_native(NativeFunction::new("sha1", sha1_fn));
-    evaluator.register_native(NativeFunction::new("sha256", sha256_fn));
-    evaluator.register_native(NativeFunction::new("sha512", sha512_fn));
-    evaluator.register_native(NativeFunction::new("hmac_sha256", hmac_sha256_fn));
-    evaluator.register_native(NativeFunction::new("hmac_sha512", hmac_sha512_fn));
-    evaluator.register_native(NativeFunction::new(
-        "constant_time_compare",
-        constant_time_compare_fn,
-    ));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("md5", md5_fn),
+        NativeFunction::new("sha1", sha1_fn),
+        NativeFunction::new("sha256", sha256_fn),
+        NativeFunction::new("sha512", sha512_fn),
+        NativeFunction::new("hmac_sha256", hmac_sha256_fn),
+        NativeFunction::new("hmac_sha512", hmac_sha512_fn),
+        NativeFunction::new("constant_time_compare", constant_time_compare_fn),
+    ]
 }
 
 async fn md5_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

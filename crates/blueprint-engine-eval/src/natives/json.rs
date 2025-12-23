@@ -6,16 +6,15 @@ use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use serde_json;
 use tokio::sync::RwLock;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("json_encode", json_encode));
-    evaluator.register_native(NativeFunction::new("json_decode", json_decode));
-
-    evaluator.register_module_native("json", NativeFunction::new("encode", json_encode));
-    evaluator.register_module_native("json", NativeFunction::new("decode", json_decode));
-    evaluator.register_module_native("json", NativeFunction::new("dumps", json_encode));
-    evaluator.register_module_native("json", NativeFunction::new("loads", json_decode));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("json_encode", json_encode),
+        NativeFunction::new("json_decode", json_decode),
+        NativeFunction::new("encode", json_encode),
+        NativeFunction::new("decode", json_decode),
+        NativeFunction::new("dumps", json_encode),
+        NativeFunction::new("loads", json_decode),
+    ]
 }
 
 async fn json_encode(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

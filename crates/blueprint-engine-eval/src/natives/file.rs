@@ -6,24 +6,24 @@ use tokio::fs;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::RwLock;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("read_file", read_file));
-    evaluator.register_native(NativeFunction::new("write_file", write_file));
-    evaluator.register_native(NativeFunction::new("append_file", append_file));
-    evaluator.register_native(NativeFunction::new("exists", exists));
-    evaluator.register_native(NativeFunction::new("is_file", is_file));
-    evaluator.register_native(NativeFunction::new("is_dir", is_dir));
-    evaluator.register_native(NativeFunction::new("glob", glob_fn));
-    evaluator.register_native(NativeFunction::new("mkdir", mkdir));
-    evaluator.register_native(NativeFunction::new("rm", rm));
-    evaluator.register_native(NativeFunction::new("cp", cp));
-    evaluator.register_native(NativeFunction::new("mv", mv));
-    evaluator.register_native(NativeFunction::new("readdir", readdir));
-    evaluator.register_native(NativeFunction::new("basename", basename));
-    evaluator.register_native(NativeFunction::new("dirname", dirname));
-    evaluator.register_native(NativeFunction::new("abspath", abspath));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("read_file", read_file),
+        NativeFunction::new("write_file", write_file),
+        NativeFunction::new("append_file", append_file),
+        NativeFunction::new("exists", exists),
+        NativeFunction::new("is_file", is_file),
+        NativeFunction::new("is_dir", is_dir),
+        NativeFunction::new("glob", glob_fn),
+        NativeFunction::new("mkdir", mkdir),
+        NativeFunction::new("rm", rm),
+        NativeFunction::new("cp", cp),
+        NativeFunction::new("mv", mv),
+        NativeFunction::new("readdir", readdir),
+        NativeFunction::new("basename", basename),
+        NativeFunction::new("dirname", dirname),
+        NativeFunction::new("abspath", abspath),
+    ]
 }
 
 async fn read_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

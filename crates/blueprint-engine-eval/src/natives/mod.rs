@@ -11,31 +11,40 @@ mod process;
 mod random;
 mod redact;
 mod regex;
+pub mod registry;
 mod socket;
 mod task;
 mod time;
 pub mod triggers;
 mod websocket;
 
+pub use builtins::call_func;
+pub use registry::NativeModuleRegistry;
+
 use crate::eval::Evaluator;
 
-pub fn register_all(evaluator: &mut Evaluator) {
-    approval::register(evaluator);
+pub fn register_builtins(evaluator: &mut Evaluator) {
     builtins::register(evaluator);
     console::register(evaluator);
-    crypto::register(evaluator);
-    file::register(evaluator);
-    http::register(evaluator);
-    json::register(evaluator);
-    jwt::register(evaluator);
-    parallel::register(evaluator);
-    process::register(evaluator);
-    random::register(evaluator);
-    redact::register(evaluator);
-    regex::register(evaluator);
-    socket::register(evaluator);
-    task::register(evaluator);
-    time::register(evaluator);
-    triggers::register(evaluator);
-    websocket::register(evaluator);
+}
+
+pub fn build_registry() -> NativeModuleRegistry {
+    let mut registry = NativeModuleRegistry::new();
+    registry.register_module("approval", approval::get_functions());
+    registry.register_module("crypto", crypto::get_functions());
+    registry.register_module("file", file::get_functions());
+    registry.register_module("http", http::get_functions());
+    registry.register_module("json", json::get_functions());
+    registry.register_module("jwt", jwt::get_functions());
+    registry.register_module("parallel", parallel::get_functions());
+    registry.register_module("process", process::get_functions());
+    registry.register_module("random", random::get_functions());
+    registry.register_module("redact", redact::get_functions());
+    registry.register_module("regex", regex::get_functions());
+    registry.register_module("socket", socket::get_functions());
+    registry.register_module("task", task::get_functions());
+    registry.register_module("time", time::get_functions());
+    registry.register_module("triggers", triggers::get_functions());
+    registry.register_module("websocket", websocket::get_functions());
+    registry
 }

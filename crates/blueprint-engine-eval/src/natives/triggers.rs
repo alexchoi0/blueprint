@@ -109,14 +109,16 @@ impl TriggerRegistry {
     }
 }
 
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("http_server", http_server_fn));
-    evaluator.register_native(NativeFunction::new("cron", cron_fn));
-    evaluator.register_native(NativeFunction::new("interval", interval_fn));
-    evaluator.register_native(NativeFunction::new("stop", stop_fn));
-    evaluator.register_native(NativeFunction::new("stop_all", stop_all_fn));
-    evaluator.register_native(NativeFunction::new("running", running_fn));
-    evaluator.register_native(NativeFunction::new("triggers", triggers_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("http_server", http_server_fn),
+        NativeFunction::new("cron", cron_fn),
+        NativeFunction::new("interval", interval_fn),
+        NativeFunction::new("stop", stop_fn),
+        NativeFunction::new("stop_all", stop_all_fn),
+        NativeFunction::new("running", running_fn),
+        NativeFunction::new("triggers", triggers_fn),
+    ]
 }
 
 pub async fn has_active_triggers() -> bool {

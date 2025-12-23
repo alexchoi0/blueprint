@@ -8,10 +8,10 @@ use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("ask_for_approval", ask_for_approval));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("ask_for_approval", ask_for_approval),
+    ]
 }
 
 async fn ask_for_approval(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

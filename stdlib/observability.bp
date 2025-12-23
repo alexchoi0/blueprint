@@ -1,3 +1,9 @@
+load("@bp/http", "http_request")
+load("@bp/json", "json_encode", "json_decode")
+load("@bp/process", "env")
+load("@bp/time", "time")
+load("@bp/encoding", "base64_encode")
+
 def Datadog(api_key=None, app_key=None, site=None):
     """
     Create a Datadog client for monitoring and observability.

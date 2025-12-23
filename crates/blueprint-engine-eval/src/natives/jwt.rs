@@ -5,10 +5,10 @@ use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde_json::Value as JsonValue;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("jwt_sign", jwt_sign_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("jwt_sign", jwt_sign_fn),
+    ]
 }
 
 async fn jwt_sign_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

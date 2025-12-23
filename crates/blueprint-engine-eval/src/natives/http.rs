@@ -6,11 +6,11 @@ use futures_util::StreamExt;
 use reqwest::Client;
 use tokio::sync::mpsc;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("http_request", http_request));
-    evaluator.register_native(NativeFunction::new("download", download));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("http_request", http_request),
+        NativeFunction::new("download", download),
+    ]
 }
 
 async fn http_request(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

@@ -24,9 +24,11 @@ fn random_id() -> String {
 }
 use crate::natives::triggers::{TriggerHandle, TriggerType, TRIGGER_REGISTRY};
 
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("ws_connect", ws_connect));
-    evaluator.register_native(NativeFunction::new("ws_server", ws_server));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("ws_connect", ws_connect),
+        NativeFunction::new("ws_server", ws_server),
+    ]
 }
 
 fn create_ws_connection(

@@ -5,13 +5,13 @@ use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use regex::Regex;
 use tokio::sync::RwLock;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("regex_match", regex_match_fn));
-    evaluator.register_native(NativeFunction::new("regex_find_all", regex_find_all_fn));
-    evaluator.register_native(NativeFunction::new("regex_replace", regex_replace_fn));
-    evaluator.register_native(NativeFunction::new("regex_split", regex_split_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("regex_match", regex_match_fn),
+        NativeFunction::new("regex_find_all", regex_find_all_fn),
+        NativeFunction::new("regex_replace", regex_replace_fn),
+        NativeFunction::new("regex_split", regex_split_fn),
+    ]
 }
 
 async fn regex_match_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

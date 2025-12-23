@@ -4,12 +4,12 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use tokio::time::{sleep, Duration};
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("now", now));
-    evaluator.register_native(NativeFunction::new("sleep", sleep_fn));
-    evaluator.register_native(NativeFunction::new("time", now));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("now", now),
+        NativeFunction::new("sleep", sleep_fn),
+        NativeFunction::new("time", now),
+    ]
 }
 
 async fn now(_args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

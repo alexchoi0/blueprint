@@ -9,8 +9,10 @@ use tokio::time::timeout;
 
 use crate::eval::Evaluator;
 
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("task", task_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("task", task_fn),
+    ]
 }
 
 async fn task_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

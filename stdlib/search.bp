@@ -1,3 +1,7 @@
+load("@bp/http", "http_request")
+load("@bp/json", "json_encode", "json_decode")
+load("@bp/process", "env")
+
 def Tavily(api_key=None):
     """
     Create a Tavily client for web search.

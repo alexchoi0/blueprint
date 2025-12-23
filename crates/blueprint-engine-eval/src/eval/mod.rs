@@ -19,6 +19,7 @@ use blueprint_starlark_syntax::syntax::ast::{ArgumentP, ExprP};
 use blueprint_starlark_syntax::codemap::CodeMap;
 use tokio::sync::RwLock;
 
+use crate::natives::NativeModuleRegistry;
 use crate::scope::Scope;
 
 pub struct FrozenModule {
@@ -26,14 +27,22 @@ pub struct FrozenModule {
 }
 
 static MODULE_CACHE: OnceLock<RwLock<HashMap<String, Arc<FrozenModule>>>> = OnceLock::new();
+static NATIVE_REGISTRY: OnceLock<Arc<NativeModuleRegistry>> = OnceLock::new();
 
 fn get_module_cache() -> &'static RwLock<HashMap<String, Arc<FrozenModule>>> {
     MODULE_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
 }
 
+fn get_native_registry() -> Arc<NativeModuleRegistry> {
+    NATIVE_REGISTRY
+        .get_or_init(|| Arc::new(crate::natives::build_registry()))
+        .clone()
+}
+
 pub struct Evaluator {
     pub(crate) natives: HashMap<String, Arc<NativeFunction>>,
     pub(crate) modules: HashMap<String, HashMap<String, Arc<NativeFunction>>>,
+    pub(crate) native_registry: Arc<NativeModuleRegistry>,
     pub(crate) codemap: Option<CodeMap>,
     pub(crate) current_file: Option<PathBuf>,
 }
@@ -43,6 +52,7 @@ impl Evaluator {
         let mut evaluator = Self {
             natives: HashMap::new(),
             modules: HashMap::new(),
+            native_registry: get_native_registry(),
             codemap: None,
             current_file: None,
         };
@@ -71,7 +81,7 @@ impl Evaluator {
     }
 
     fn register_builtins(&mut self) {
-        crate::natives::register_all(self);
+        crate::natives::register_builtins(self);
     }
 
     pub fn value_to_dict_key(&self, value: &Value) -> Result<String> {
@@ -212,6 +222,13 @@ impl Evaluator {
         scope: Arc<Scope>,
     ) -> Result<Value> {
         let module_path = &load.module.node;
+
+        if let Some(native_module) = module_path.strip_prefix("@bp/") {
+            if self.native_registry.has_module(native_module) {
+                return self.bind_native_module(load, native_module, scope).await;
+            }
+        }
+
         let resolved_path = self.resolve_module_path(module_path)?;
         let canonical_path = std::fs::canonicalize(&resolved_path)
             .unwrap_or_else(|_| resolved_path.clone())
@@ -255,6 +272,71 @@ impl Evaluator {
         }
 
         self.bind_load_args(load, &frozen.exports, scope, module_path).await
+    }
+
+    async fn bind_native_module(
+        &self,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        module_name: &str,
+        scope: Arc<Scope>,
+    ) -> Result<Value> {
+        let module_funcs = self.native_registry.get_module(module_name).ok_or_else(|| {
+            BlueprintError::ImportError {
+                message: format!("Native module '@bp/{}' not found", module_name),
+            }
+        })?;
+
+        if load.args.is_empty() {
+            let mut dict = IndexMap::new();
+            for (func_name, func) in module_funcs {
+                dict.insert(func_name.clone(), Value::NativeFunction(func.clone()));
+            }
+            scope
+                .define(module_name, Value::Dict(Arc::new(RwLock::new(dict))))
+                .await;
+            return Ok(Value::None);
+        }
+
+        if load.args.len() == 1 && load.args[0].their.node == "__module__" {
+            let alias_name = load.args[0].local.node.ident.as_str();
+            let mut dict = IndexMap::new();
+            for (func_name, func) in module_funcs {
+                dict.insert(func_name.clone(), Value::NativeFunction(func.clone()));
+            }
+            scope
+                .define(alias_name, Value::Dict(Arc::new(RwLock::new(dict))))
+                .await;
+            return Ok(Value::None);
+        }
+
+        if load.args.len() == 1 && load.args[0].their.node == "*" {
+            for (func_name, func) in module_funcs {
+                scope
+                    .define(func_name, Value::NativeFunction(func.clone()))
+                    .await;
+            }
+            return Ok(Value::None);
+        }
+
+        for arg in &load.args {
+            let local_name = arg.local.node.ident.as_str();
+            let their_name = &arg.their.node;
+
+            let func = module_funcs.get(their_name).ok_or_else(|| {
+                BlueprintError::ImportError {
+                    message: format!(
+                        "Function '{}' not found in native module '@bp/{}'",
+                        their_name, module_name
+                    ),
+                }
+            })?;
+
+            scope
+                .define(local_name, Value::NativeFunction(func.clone()))
+                .await;
+        }
+
+        Ok(Value::None)
     }
 
     async fn bind_load_args(

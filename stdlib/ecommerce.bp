@@ -1,3 +1,8 @@
+load("@bp/http", "http_request")
+load("@bp/json", "json_encode", "json_decode")
+load("@bp/process", "env")
+load("@bp/encoding", "base64_encode")
+
 def Shopify(store=None, access_token=None):
     """
     Create a Shopify client for e-commerce operations.

@@ -7,8 +7,10 @@ use tokio::task::JoinSet;
 
 use crate::eval::Evaluator;
 
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("parallel", parallel));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("parallel", parallel),
+    ]
 }
 
 async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {

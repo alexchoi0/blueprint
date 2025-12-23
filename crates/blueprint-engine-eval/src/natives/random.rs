@@ -4,12 +4,12 @@ use std::sync::Arc;
 use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
 use rand::RngCore;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("random_bytes", random_bytes_fn));
-    evaluator.register_native(NativeFunction::new("random_int", random_int_fn));
-    evaluator.register_native(NativeFunction::new("random_float", random_float_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("random_bytes", random_bytes_fn),
+        NativeFunction::new("random_int", random_int_fn),
+        NativeFunction::new("random_float", random_float_fn),
+    ]
 }
 
 async fn random_bytes_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

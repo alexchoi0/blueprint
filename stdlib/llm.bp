@@ -1,3 +1,7 @@
+load("@bp/http", "http_request")
+load("@bp/json", "json_encode", "json_decode")
+load("@bp/process", "env")
+
 def agent(prompt, system=None, model="gpt-4o", temperature=0.7, api_key=None, base_url=None, tools=None, tool_handlers=None, max_iterations=10, stream=False):
     """
     Call an LLM with optional tool/function calling support.

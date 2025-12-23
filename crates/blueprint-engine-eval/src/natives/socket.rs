@@ -7,14 +7,14 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
 use tokio::sync::RwLock;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("tcp_connect", tcp_connect_fn));
-    evaluator.register_native(NativeFunction::new("tcp_listen", tcp_listen_fn));
-    evaluator.register_native(NativeFunction::new("udp_bind", udp_bind_fn));
-    evaluator.register_native(NativeFunction::new("udp_send", udp_send_fn));
-    evaluator.register_native(NativeFunction::new("dns_lookup", dns_lookup_fn));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("tcp_connect", tcp_connect_fn),
+        NativeFunction::new("tcp_listen", tcp_listen_fn),
+        NativeFunction::new("udp_bind", udp_bind_fn),
+        NativeFunction::new("udp_send", udp_send_fn),
+        NativeFunction::new("dns_lookup", dns_lookup_fn),
+    ]
 }
 
 async fn tcp_connect_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

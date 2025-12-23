@@ -128,21 +128,31 @@ impl Checker {
                     });
                 }
 
-                for arg in &load.args {
-                    let local_name = arg.local.node.ident.as_str();
-                    let their_name = &arg.their.node;
-
-                    if their_name.starts_with('_') {
-                        self.errors.push(CheckerError {
-                            message: format!(
-                                "'{}' is private and cannot be imported from '{}'",
-                                their_name, module_path
-                            ),
-                            location: self.get_location(&stmt.span),
-                        });
+                if load.args.is_empty() {
+                    if let Some(module_name) = module_path.strip_prefix("@bp/") {
+                        scope.define_frozen(module_name.to_string());
                     }
+                } else if load.args.len() == 1 && load.args[0].their.node == "*" {
+                } else if load.args.len() == 1 && load.args[0].their.node == "__module__" {
+                    let alias_name = load.args[0].local.node.ident.as_str();
+                    scope.define_frozen(alias_name.to_string());
+                } else {
+                    for arg in &load.args {
+                        let local_name = arg.local.node.ident.as_str();
+                        let their_name = &arg.their.node;
 
-                    scope.define_frozen(local_name.to_string());
+                        if their_name.starts_with('_') && their_name != "__module__" {
+                            self.errors.push(CheckerError {
+                                message: format!(
+                                    "'{}' is private and cannot be imported from '{}'",
+                                    their_name, module_path
+                                ),
+                                location: self.get_location(&stmt.span),
+                            });
+                        }
+
+                        scope.define_frozen(local_name.to_string());
+                    }
                 }
             }
 

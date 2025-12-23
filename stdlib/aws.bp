@@ -1,3 +1,9 @@
+load("@bp/http", "http_request")
+load("@bp/process", "env")
+load("@bp/time", "time")
+load("@bp/crypto", "sha256", "hmac_sha256")
+load("@bp/encoding", "hex_encode")
+
 def S3(access_key=None, secret_key=None, region=None):
     """
     Create an S3 client.

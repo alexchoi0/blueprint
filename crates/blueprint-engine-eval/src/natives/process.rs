@@ -4,15 +4,15 @@ use std::sync::Arc;
 use blueprint_engine_core::{BlueprintError, NativeFunction, ProcessResult, Result, Value};
 use tokio::process::Command;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("run", run));
-    evaluator.register_native(NativeFunction::new("shell", shell));
-    evaluator.register_native(NativeFunction::new("env", env_var));
-    evaluator.register_native(NativeFunction::new("set_env", set_env));
-    evaluator.register_native(NativeFunction::new("getenv", env_var));
-    evaluator.register_native(NativeFunction::new("setenv", set_env));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("run", run),
+        NativeFunction::new("shell", shell),
+        NativeFunction::new("env", env_var),
+        NativeFunction::new("set_env", set_env),
+        NativeFunction::new("getenv", env_var),
+        NativeFunction::new("setenv", set_env),
+    ]
 }
 
 async fn run(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {

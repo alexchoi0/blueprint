@@ -5,11 +5,11 @@ use blueprint_engine_core::{NativeFunction, Result, Value};
 use regex::Regex;
 use once_cell::sync::Lazy;
 
-use crate::eval::Evaluator;
-
-pub fn register(evaluator: &mut Evaluator) {
-    evaluator.register_native(NativeFunction::new("redact_pii", redact_pii));
-    evaluator.register_native(NativeFunction::new("redact_secrets", redact_secrets));
+pub fn get_functions() -> Vec<NativeFunction> {
+    vec![
+        NativeFunction::new("redact_pii", redact_pii),
+        NativeFunction::new("redact_secrets", redact_secrets),
+    ]
 }
 
 static PII_PATTERNS: Lazy<Vec<(&'static str, Regex)>> = Lazy::new(|| {
