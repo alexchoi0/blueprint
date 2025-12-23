@@ -281,6 +281,50 @@ pub async fn to_iter(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Resul
     }
 }
 
+pub async fn ord_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(BlueprintError::ArgumentError {
+            message: format!("ord() takes exactly 1 argument ({} given)", args.len()),
+        });
+    }
+
+    let s = args[0].as_string()?;
+    let chars: Vec<char> = s.chars().collect();
+
+    if chars.len() != 1 {
+        return Err(BlueprintError::ValueError {
+            message: format!(
+                "ord() expected a character, but string of length {} found",
+                chars.len()
+            ),
+        });
+    }
+
+    Ok(Value::Int(chars[0] as i64))
+}
+
+pub async fn chr_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.len() != 1 {
+        return Err(BlueprintError::ArgumentError {
+            message: format!("chr() takes exactly 1 argument ({} given)", args.len()),
+        });
+    }
+
+    let code = args[0].as_int()?;
+
+    if code < 0 || code > 0x10FFFF {
+        return Err(BlueprintError::ValueError {
+            message: format!("chr() arg not in range(0x110000): {}", code),
+        });
+    }
+
+    let c = char::from_u32(code as u32).ok_or_else(|| BlueprintError::ValueError {
+        message: format!("chr() arg not a valid unicode code point: {}", code),
+    })?;
+
+    Ok(Value::String(Arc::new(c.to_string())))
+}
+
 async fn iter_generator_task(
     iterable: Value,
     tx: mpsc::Sender<GeneratorMessage>,

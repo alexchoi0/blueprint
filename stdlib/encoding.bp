@@ -1,0 +1,181 @@
+def hex_encode(data):
+    """
+    Encode a string to hexadecimal.
+
+    Args:
+        data: String to encode
+
+    Returns:
+        Hexadecimal string representation
+    """
+    hex_chars = "0123456789abcdef"
+    result = ""
+    for c in data:
+        b = ord(c)
+        result = result + hex_chars[b // 16] + hex_chars[b % 16]
+    return result
+
+def hex_decode(hex_str):
+    """
+    Decode a hexadecimal string.
+
+    Args:
+        hex_str: Hexadecimal string to decode
+
+    Returns:
+        Decoded string
+    """
+    result = ""
+    hex_chars = "0123456789abcdef"
+    for i in range(len(hex_str) // 2):
+        idx = i * 2
+        high = hex_chars.find(hex_str[idx].lower())
+        low = hex_chars.find(hex_str[idx + 1].lower())
+        if high == -1 or low == -1:
+            fail("Invalid hex character in string")
+        result = result + chr(high * 16 + low)
+    return result
+
+def base64_encode(data, url_safe=False):
+    """
+    Encode a string to base64.
+
+    Args:
+        data: String to encode
+        url_safe: Use URL-safe alphabet (+ -> -, / -> _)
+
+    Returns:
+        Base64 encoded string
+    """
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    if url_safe:
+        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+    result = ""
+    padding = (3 - len(data) % 3) % 3
+    padded_data = data + "\x00" * padding
+
+    for i in range(len(padded_data) // 3):
+        idx = i * 3
+        b1 = ord(padded_data[idx])
+        b2 = ord(padded_data[idx + 1])
+        b3 = ord(padded_data[idx + 2])
+
+        n = (b1 << 16) | (b2 << 8) | b3
+        result = result + chars[(n >> 18) & 63]
+        result = result + chars[(n >> 12) & 63]
+        result = result + chars[(n >> 6) & 63]
+        result = result + chars[n & 63]
+
+    if padding > 0:
+        result = result[:len(result) - padding] + "=" * padding
+    return result
+
+def base64_decode(encoded, url_safe=False):
+    """
+    Decode a base64 string.
+
+    Args:
+        encoded: Base64 encoded string
+        url_safe: Use URL-safe alphabet
+
+    Returns:
+        Decoded string
+    """
+    chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
+    if url_safe:
+        chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+
+    padding = 0
+    clean = ""
+    for c in encoded:
+        if c == "=":
+            padding = padding + 1
+        elif c != "\n" and c != "\r" and c != " ":
+            clean = clean + c
+
+    extra = (4 - len(clean) % 4) % 4
+    for _ in range(extra):
+        clean = clean + "A"
+    if extra > 0 and padding == 0:
+        padding = extra
+
+    result = ""
+    for i in range(len(clean) // 4):
+        idx = i * 4
+        c1 = chars.find(clean[idx])
+        c2 = chars.find(clean[idx + 1])
+        c3 = chars.find(clean[idx + 2])
+        c4 = chars.find(clean[idx + 3])
+
+        if c1 == -1 or c2 == -1 or c3 == -1 or c4 == -1:
+            fail("Invalid base64 character")
+
+        n = (c1 << 18) | (c2 << 12) | (c3 << 6) | c4
+        result = result + chr((n >> 16) & 255)
+        result = result + chr((n >> 8) & 255)
+        result = result + chr(n & 255)
+
+    if padding > 0:
+        result = result[:len(result) - padding]
+    return result
+
+def url_encode(data):
+    """
+    URL-encode a string (percent encoding).
+
+    Args:
+        data: String to encode
+
+    Returns:
+        URL-encoded string
+    """
+    hex_chars = "0123456789ABCDEF"
+    safe_chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_.~"
+    result = ""
+    for c in data:
+        if c in safe_chars:
+            result = result + c
+        else:
+            code = ord(c)
+            result = result + "%" + hex_chars[code // 16] + hex_chars[code % 16]
+    return result
+
+def url_decode(encoded):
+    """
+    Decode a URL-encoded string.
+
+    Args:
+        encoded: URL-encoded string
+
+    Returns:
+        Decoded string
+    """
+    hex_chars = "0123456789ABCDEFabcdef"
+    result = ""
+    i = 0
+    length = len(encoded)
+    for _ in range(length):
+        if i >= length:
+            break
+        c = encoded[i]
+        if c == "%":
+            if i + 2 >= length:
+                fail("Invalid URL encoding: incomplete escape sequence")
+            high = hex_chars.find(encoded[i + 1])
+            low = hex_chars.find(encoded[i + 2])
+            if high == -1 or low == -1:
+                fail("Invalid URL encoding: invalid hex characters")
+            if high >= 16:
+                high = high - 6
+            if low >= 16:
+                low = low - 6
+            result = result + chr(high * 16 + low)
+            i = i + 3
+        elif c == "+":
+            result = result + " "
+            i = i + 1
+        else:
+            result = result + c
+            i = i + 1
+    return result

@@ -14,9 +14,14 @@ use blueprint_engine_core::{BlueprintError, NativeFunction, Result, StreamIterat
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
-use uuid::Uuid;
 
 use crate::eval::Evaluator;
+
+fn random_id() -> String {
+    use rand::Rng;
+    let bytes: [u8; 4] = rand::thread_rng().gen();
+    hex::encode(bytes)
+}
 use crate::natives::triggers::{TriggerHandle, TriggerType, TRIGGER_REGISTRY};
 
 pub fn register(evaluator: &mut Evaluator) {
@@ -224,10 +229,7 @@ async fn ws_server(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<V
         .transpose()?
         .unwrap_or_else(|| "/".to_string());
 
-    let id = format!(
-        "ws-{}",
-        Uuid::new_v4().to_string().split('-').next().unwrap()
-    );
+    let id = format!("ws-{}", random_id());
     let running = Arc::new(RwLock::new(true));
 
     let state = WsServerState { handler };

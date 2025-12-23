@@ -1,0 +1,74 @@
+def uuid():
+    """
+    Generate a random UUID (version 4).
+
+    Returns:
+        UUID string in format xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    """
+    return uuid_v4()
+
+def uuid_v4():
+    """
+    Generate a random UUID version 4.
+
+    Returns:
+        UUID string in format xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
+    """
+    bytes = random_bytes(16)
+    hex_chars = "0123456789abcdef"
+    result = ""
+
+    for i in range(16):
+        b = ord(bytes[i])
+        if i == 6:
+            b = (b & 0x0f) | 0x40
+        elif i == 8:
+            b = (b & 0x3f) | 0x80
+
+        result = result + hex_chars[b // 16] + hex_chars[b % 16]
+
+        if i == 3 or i == 5 or i == 7 or i == 9:
+            result = result + "-"
+
+    return result
+
+def uuid_v7():
+    """
+    Generate a time-ordered UUID version 7.
+
+    Returns:
+        UUID string with embedded timestamp for sorting
+    """
+    now_ms = int(time() * 1000)
+    rand_bytes = random_bytes(10)
+    hex_chars = "0123456789abcdef"
+
+    result = ""
+    for i in range(6):
+        shift = (5 - i) * 8
+        b = (now_ms >> shift) & 0xff
+        result = result + hex_chars[b // 16] + hex_chars[b % 16]
+        if i == 3:
+            result = result + "-"
+
+    result = result + "-"
+
+    b6 = (ord(rand_bytes[0]) & 0x0f) | 0x70
+    result = result + hex_chars[b6 // 16] + hex_chars[b6 % 16]
+    b7 = ord(rand_bytes[1])
+    result = result + hex_chars[b7 // 16] + hex_chars[b7 % 16]
+
+    result = result + "-"
+
+    b8 = (ord(rand_bytes[2]) & 0x3f) | 0x80
+    result = result + hex_chars[b8 // 16] + hex_chars[b8 % 16]
+    b9 = ord(rand_bytes[3])
+    result = result + hex_chars[b9 // 16] + hex_chars[b9 % 16]
+
+    result = result + "-"
+
+    for i in range(4, 10):
+        b = ord(rand_bytes[i])
+        result = result + hex_chars[b // 16] + hex_chars[b % 16]
+
+    return result

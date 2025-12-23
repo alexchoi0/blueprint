@@ -43,6 +43,8 @@ pub fn register(evaluator: &mut Evaluator) {
     evaluator.register_native(NativeFunction::new("fail", control::fail));
     evaluator.register_native(NativeFunction::new("exit", control::exit));
     evaluator.register_native(NativeFunction::new("assert", control::assert_fn));
+    evaluator.register_native(NativeFunction::new("ord", types::ord_fn));
+    evaluator.register_native(NativeFunction::new("chr", types::chr_fn));
 }
 
 pub async fn call_func(func: &Value, args: Vec<Value>) -> Result<Value> {
