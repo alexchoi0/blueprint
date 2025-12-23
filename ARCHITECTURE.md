@@ -1,8 +1,8 @@
-# Blueprint Architecture
+# Blueprint Engine Architecture
 
 ## Implicit Async Starlark Runtime
 
-Blueprint is a high-performance Starlark script executor with implicit async I/O.
+Blueprint Engine is a high-performance Starlark script executor with implicit async I/O.
 Scripts use standard Starlark syntax—no async/await keywords—while the runtime
 automatically yields to Tokio at I/O boundaries, enabling thousands of concurrent scripts.
 
@@ -12,7 +12,7 @@ automatically yields to Tokio at I/O boundaries, enabling thousands of concurren
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              BLUEPRINT                                      │
+│                            BLUEPRINT Engine                                 │
 │                     Implicit Async Starlark Runtime                         │
 ├─────────────────────────────────────────────────────────────────────────────┤
 │                                                                             │
