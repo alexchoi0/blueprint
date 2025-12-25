@@ -35,14 +35,6 @@ impl Evaluator {
                     return Ok(Value::NativeFunction(native.clone()));
                 }
 
-                if let Some(module_funcs) = self.custom_modules.get(name) {
-                    let mut dict = IndexMap::new();
-                    for (func_name, func) in module_funcs {
-                        dict.insert(func_name.clone(), Value::NativeFunction(func.clone()));
-                    }
-                    return Ok(Value::Dict(Arc::new(tokio::sync::RwLock::new(dict))));
-                }
-
                 Err(BlueprintError::NameError {
                     name: name.to_string(),
                 })

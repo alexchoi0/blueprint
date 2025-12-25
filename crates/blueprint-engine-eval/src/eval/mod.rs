@@ -39,7 +39,6 @@ fn get_stdlib_registry() -> Arc<ModuleRegistry> {
 
 pub struct Evaluator {
     pub(crate) builtins: HashMap<String, Arc<NativeFunction>>,
-    pub(crate) custom_modules: HashMap<String, HashMap<String, Arc<NativeFunction>>>,
     pub(crate) stdlib: Arc<ModuleRegistry>,
     pub(crate) codemap: Option<CodeMap>,
     pub(crate) current_file: Option<PathBuf>,
@@ -49,7 +48,6 @@ impl Evaluator {
     pub fn new() -> Self {
         let mut evaluator = Self {
             builtins: HashMap::new(),
-            custom_modules: HashMap::new(),
             stdlib: get_stdlib_registry(),
             codemap: None,
             current_file: None,
@@ -69,20 +67,6 @@ impl Evaluator {
 
     pub fn register_native(&mut self, func: NativeFunction) {
         self.builtins.insert(func.name.clone(), Arc::new(func));
-    }
-
-    pub fn register_module_native(&mut self, module: &str, func: NativeFunction) {
-        self.custom_modules
-            .entry(module.to_string())
-            .or_default()
-            .insert(func.name.clone(), Arc::new(func));
-    }
-
-    pub fn register_native_module(&mut self, module_path: &str, functions: Vec<NativeFunction>) {
-        let module_funcs = self.custom_modules.entry(module_path.to_string()).or_default();
-        for func in functions {
-            module_funcs.insert(func.name.clone(), Arc::new(func));
-        }
     }
 
     fn register_builtins(&mut self) {
@@ -238,15 +222,9 @@ impl Evaluator {
         let module_path = &load.module.node;
 
         if let Some(module_name) = module_path.strip_prefix('@') {
-            if let Some(module_funcs) = self.custom_modules.get(module_name) {
-                return self
-                    .bind_evaluator_module(load, module_name, module_funcs, scope)
-                    .await;
-            }
-
-            if let Some(native_module) = module_name.strip_prefix("bp/") {
-                if self.stdlib.has_module(native_module) {
-                    return self.bind_native_module(load, native_module, scope).await;
+            if let Some(stdlib_module) = module_name.strip_prefix("bp/") {
+                if self.stdlib.has_module(stdlib_module) {
+                    return self.bind_stdlib_module(load, stdlib_module, scope).await;
                 }
             }
         }
@@ -299,20 +277,7 @@ impl Evaluator {
             .await
     }
 
-    async fn bind_evaluator_module(
-        &self,
-        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
-            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
-        >,
-        module_name: &str,
-        module_funcs: &HashMap<String, Arc<NativeFunction>>,
-        scope: Arc<Scope>,
-    ) -> Result<Value> {
-        self.bind_native_functions(load, module_funcs, scope, module_name, &format!("@{}", module_name))
-            .await
-    }
-
-    async fn bind_native_module(
+    async fn bind_stdlib_module(
         &self,
         load: &blueprint_starlark_syntax::syntax::ast::LoadP<
             blueprint_starlark_syntax::syntax::ast::AstNoPayload,
