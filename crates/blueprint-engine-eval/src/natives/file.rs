@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use blueprint_engine_core::{
+    check_fs_delete, check_fs_read, check_fs_write,
+    validation::{get_string_arg, require_args},
     BlueprintError, NativeFunction, Result, Value,
-    check_fs_read, check_fs_write, check_fs_delete,
 };
 use tokio::fs;
 use tokio::io::AsyncWriteExt;
@@ -30,13 +31,8 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn read_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("read_file() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.read_file", &args, 1)?;
+    let path = get_string_arg("file.read_file", &args, 0)?;
     check_fs_read(&path).await?;
 
     let content = fs::read_to_string(&path)
@@ -50,16 +46,10 @@ async fn read_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<
 }
 
 async fn write_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("write_file() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.write_file", &args, 2)?;
+    let path = get_string_arg("file.write_file", &args, 0)?;
     check_fs_write(&path).await?;
-
-    let content = args[1].as_string()?;
+    let content = get_string_arg("file.write_file", &args, 1)?;
 
     fs::write(&path, &content)
         .await
@@ -72,16 +62,10 @@ async fn write_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result
 }
 
 async fn append_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("append_file() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.append_file", &args, 2)?;
+    let path = get_string_arg("file.append_file", &args, 0)?;
     check_fs_write(&path).await?;
-
-    let content = args[1].as_string()?;
+    let content = get_string_arg("file.append_file", &args, 1)?;
 
     let mut file = fs::OpenOptions::new()
         .create(true)
@@ -104,13 +88,8 @@ async fn append_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Resul
 }
 
 async fn exists(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("exists() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.exists", &args, 1)?;
+    let path = get_string_arg("file.exists", &args, 0)?;
     check_fs_read(&path).await?;
 
     let exists = fs::try_exists(&path).await.unwrap_or(false);
@@ -119,13 +98,8 @@ async fn exists(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Val
 }
 
 async fn is_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("is_file() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.is_file", &args, 1)?;
+    let path = get_string_arg("file.is_file", &args, 0)?;
     check_fs_read(&path).await?;
 
     let is_file = fs::metadata(&path)
@@ -137,13 +111,8 @@ async fn is_file(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn is_dir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("is_dir() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.is_dir", &args, 1)?;
+    let path = get_string_arg("file.is_dir", &args, 0)?;
     check_fs_read(&path).await?;
 
     let is_dir = fs::metadata(&path)
@@ -155,13 +124,8 @@ async fn is_dir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Val
 }
 
 async fn glob_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("glob() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let pattern = args[0].as_string()?;
+    require_args("file.glob", &args, 1)?;
+    let pattern = get_string_arg("file.glob", &args, 0)?;
     check_fs_read(&pattern).await?;
 
     let paths: Vec<Value> = glob::glob(&pattern)
@@ -176,13 +140,8 @@ async fn glob_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn mkdir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("mkdir() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.mkdir", &args, 1)?;
+    let path = get_string_arg("file.mkdir", &args, 0)?;
     check_fs_write(&path).await?;
 
     fs::create_dir_all(&path)
@@ -196,13 +155,8 @@ async fn mkdir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Valu
 }
 
 async fn rm(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("rm() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.rm", &args, 1)?;
+    let path = get_string_arg("file.rm", &args, 0)?;
     check_fs_delete(&path).await?;
 
     let metadata = fs::metadata(&path)
@@ -226,14 +180,9 @@ async fn rm(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> 
 }
 
 async fn cp(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("cp() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let src = args[0].as_string()?;
-    let dst = args[1].as_string()?;
+    require_args("file.cp", &args, 2)?;
+    let src = get_string_arg("file.cp", &args, 0)?;
+    let dst = get_string_arg("file.cp", &args, 1)?;
     check_fs_read(&src).await?;
     check_fs_write(&dst).await?;
 
@@ -248,14 +197,9 @@ async fn cp(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> 
 }
 
 async fn mv(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("mv() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let src = args[0].as_string()?;
-    let dst = args[1].as_string()?;
+    require_args("file.mv", &args, 2)?;
+    let src = get_string_arg("file.mv", &args, 0)?;
+    let dst = get_string_arg("file.mv", &args, 1)?;
     check_fs_read(&src).await?;
     check_fs_write(&dst).await?;
     check_fs_delete(&src).await?;
@@ -271,13 +215,8 @@ async fn mv(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> 
 }
 
 async fn readdir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("readdir() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.readdir", &args, 1)?;
+    let path = get_string_arg("file.readdir", &args, 0)?;
     check_fs_read(&path).await?;
 
     let mut entries = fs::read_dir(&path)
@@ -288,10 +227,14 @@ async fn readdir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
         })?;
 
     let mut names = Vec::new();
-    while let Some(entry) = entries.next_entry().await.map_err(|e| BlueprintError::IoError {
-        path: path.clone(),
-        message: e.to_string(),
-    })? {
+    while let Some(entry) = entries
+        .next_entry()
+        .await
+        .map_err(|e| BlueprintError::IoError {
+            path: path.clone(),
+            message: e.to_string(),
+        })?
+    {
         names.push(Value::String(Arc::new(
             entry.file_name().to_string_lossy().to_string(),
         )));
@@ -301,13 +244,8 @@ async fn readdir(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn basename(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("basename() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.basename", &args, 1)?;
+    let path = get_string_arg("file.basename", &args, 0)?;
     let name = std::path::Path::new(&path)
         .file_name()
         .map(|s| s.to_string_lossy().to_string())
@@ -317,13 +255,8 @@ async fn basename(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
 }
 
 async fn dirname(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("dirname() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.dirname", &args, 1)?;
+    let path = get_string_arg("file.dirname", &args, 0)?;
     let dir = std::path::Path::new(&path)
         .parent()
         .map(|p| p.to_string_lossy().to_string())
@@ -333,13 +266,8 @@ async fn dirname(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn abspath(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("abspath() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let path = args[0].as_string()?;
+    require_args("file.abspath", &args, 1)?;
+    let path = get_string_arg("file.abspath", &args, 0)?;
     let abs = std::fs::canonicalize(&path)
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or(path);

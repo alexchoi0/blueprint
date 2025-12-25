@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_float_arg, require_args},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use tokio::time::{sleep, Duration};
 
 pub fn get_functions() -> Vec<NativeFunction> {
@@ -21,13 +24,8 @@ async fn now(_args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value
 }
 
 async fn sleep_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("sleep() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let seconds = args[0].as_float()?;
+    require_args("time.sleep", &args, 1)?;
+    let seconds = get_float_arg("time.sleep", &args, 0)?;
 
     if seconds < 0.0 {
         return Err(BlueprintError::ValueError {

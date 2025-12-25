@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_int_arg, require_args, require_args_range},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use rand::RngCore;
 
 pub fn get_functions() -> Vec<NativeFunction> {
@@ -13,16 +16,8 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn random_bytes_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "random_bytes() takes exactly 1 argument ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let n = args[0].as_int()? as usize;
+    require_args("random.random_bytes", &args, 1)?;
+    let n = get_int_arg("random.random_bytes", &args, 0)? as usize;
 
     if n > 1024 * 1024 {
         return Err(BlueprintError::ArgumentError {
@@ -33,10 +28,7 @@ async fn random_bytes_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Re
     let mut bytes = vec![0u8; n];
     rand::thread_rng().fill_bytes(&mut bytes);
 
-    let output_hex = kwargs
-        .get("hex")
-        .map(|v| v.is_truthy())
-        .unwrap_or(false);
+    let output_hex = kwargs.get("hex").map(|v| v.is_truthy()).unwrap_or(false);
 
     if output_hex {
         Ok(Value::String(Arc::new(hex::encode(&bytes))))
@@ -49,6 +41,7 @@ async fn random_bytes_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Re
 
 async fn random_int_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
     use rand::Rng;
+    require_args_range("random.random_int", &args, 0, 2)?;
 
     match args.len() {
         0 => {
@@ -56,7 +49,7 @@ async fn random_int_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
             Ok(Value::Int(n))
         }
         1 => {
-            let max = args[0].as_int()?;
+            let max = get_int_arg("random.random_int", &args, 0)?;
             if max <= 0 {
                 return Err(BlueprintError::ArgumentError {
                     message: "random_int() max must be positive".to_string(),
@@ -65,9 +58,9 @@ async fn random_int_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
             let n: i64 = rand::thread_rng().gen_range(0..max);
             Ok(Value::Int(n))
         }
-        2 => {
-            let min = args[0].as_int()?;
-            let max = args[1].as_int()?;
+        _ => {
+            let min = get_int_arg("random.random_int", &args, 0)?;
+            let max = get_int_arg("random.random_int", &args, 1)?;
             if min >= max {
                 return Err(BlueprintError::ArgumentError {
                     message: "random_int() min must be less than max".to_string(),
@@ -76,27 +69,12 @@ async fn random_int_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
             let n: i64 = rand::thread_rng().gen_range(min..max);
             Ok(Value::Int(n))
         }
-        _ => Err(BlueprintError::ArgumentError {
-            message: format!(
-                "random_int() takes 0-2 arguments ({} given)",
-                args.len()
-            ),
-        }),
     }
 }
 
 async fn random_float_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
     use rand::Rng;
-
-    if !args.is_empty() {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "random_float() takes no arguments ({} given)",
-                args.len()
-            ),
-        });
-    }
-
+    require_args("random.random_float", &args, 0)?;
     let n: f64 = rand::thread_rng().gen();
     Ok(Value::Float(n))
 }

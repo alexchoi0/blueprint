@@ -1,24 +1,21 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::require_args,
+    BlueprintError, NativeFunction, Result, Value,
+};
 use tokio::sync::RwLock;
 use tokio::task::JoinSet;
 
 use crate::eval::Evaluator;
 
 pub fn get_functions() -> Vec<NativeFunction> {
-    vec![
-        NativeFunction::new("parallel", parallel),
-    ]
+    vec![NativeFunction::new("parallel", parallel)]
 }
 
 async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("parallel() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
+    require_args("parallel.parallel", &args, 1)?;
 
     let functions = match &args[0] {
         Value::List(l) => l.read().await.clone(),
@@ -64,14 +61,16 @@ async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
                             )
                         })?;
 
-                    let closure_scope = lambda.closure.as_ref().and_then(|c| {
-                        c.downcast_ref::<Arc<crate::scope::Scope>>().cloned()
-                    });
+                    let closure_scope = lambda
+                        .closure
+                        .as_ref()
+                        .and_then(|c| c.downcast_ref::<Arc<crate::scope::Scope>>().cloned());
 
-                    let base_scope =
-                        closure_scope.unwrap_or_else(crate::scope::Scope::new_global);
-                    let call_scope =
-                        crate::scope::Scope::new_child(base_scope, crate::scope::ScopeKind::Function);
+                    let base_scope = closure_scope.unwrap_or_else(crate::scope::Scope::new_global);
+                    let call_scope = crate::scope::Scope::new_child(
+                        base_scope,
+                        crate::scope::ScopeKind::Function,
+                    );
 
                     for param in &lambda.params {
                         if let Some(ref default) = param.default {
@@ -101,14 +100,16 @@ async fn parallel(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
                             )
                         })?;
 
-                    let closure_scope = func.closure.as_ref().and_then(|c| {
-                        c.downcast_ref::<Arc<crate::scope::Scope>>().cloned()
-                    });
+                    let closure_scope = func
+                        .closure
+                        .as_ref()
+                        .and_then(|c| c.downcast_ref::<Arc<crate::scope::Scope>>().cloned());
 
-                    let base_scope =
-                        closure_scope.unwrap_or_else(crate::scope::Scope::new_global);
-                    let call_scope =
-                        crate::scope::Scope::new_child(base_scope, crate::scope::ScopeKind::Function);
+                    let base_scope = closure_scope.unwrap_or_else(crate::scope::Scope::new_global);
+                    let call_scope = crate::scope::Scope::new_child(
+                        base_scope,
+                        crate::scope::ScopeKind::Function,
+                    );
 
                     for param in &func.params {
                         if let Some(ref default) = param.default {

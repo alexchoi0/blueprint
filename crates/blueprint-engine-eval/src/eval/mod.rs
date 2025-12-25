@@ -9,14 +9,12 @@ use std::sync::{Arc, OnceLock};
 use indexmap::IndexMap;
 
 use blueprint_engine_core::{
-    BlueprintError, NativeFunction, PackageSpec, Result, Value,
-    fetch_package, find_workspace_root_from, get_packages_dir_from,
+    fetch_package, find_workspace_root_from, get_packages_dir_from, BlueprintError, NativeFunction,
+    PackageSpec, Result, Value,
 };
-use blueprint_engine_parser::{
-    AstExpr, AstParameter, AstStmt, ParameterP, StmtP,
-};
-use blueprint_starlark_syntax::syntax::ast::{ArgumentP, ExprP};
+use blueprint_engine_parser::{AstExpr, AstParameter, AstStmt, ParameterP, StmtP};
 use blueprint_starlark_syntax::codemap::CodeMap;
+use blueprint_starlark_syntax::syntax::ast::{ArgumentP, ExprP};
 use tokio::sync::RwLock;
 
 use crate::natives::NativeModuleRegistry;
@@ -80,6 +78,13 @@ impl Evaluator {
             .insert(func.name.clone(), Arc::new(func));
     }
 
+    pub fn register_native_module(&mut self, module_path: &str, functions: Vec<NativeFunction>) {
+        let module_funcs = self.modules.entry(module_path.to_string()).or_default();
+        for func in functions {
+            module_funcs.insert(func.name.clone(), Arc::new(func));
+        }
+    }
+
     fn register_builtins(&mut self) {
         crate::natives::register_builtins(self);
     }
@@ -99,7 +104,9 @@ impl Evaluator {
 
     pub fn create_user_function(
         &self,
-        def: &blueprint_starlark_syntax::syntax::ast::DefP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        def: &blueprint_starlark_syntax::syntax::ast::DefP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
         scope: Arc<Scope>,
     ) -> Result<Value> {
         let params = self.convert_params(&def.params)?;
@@ -116,7 +123,9 @@ impl Evaluator {
 
     pub fn create_lambda_function(
         &self,
-        lambda: &blueprint_starlark_syntax::syntax::ast::LambdaP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        lambda: &blueprint_starlark_syntax::syntax::ast::LambdaP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
         scope: Arc<Scope>,
     ) -> Result<Value> {
         let params = self.convert_params(&lambda.params)?;
@@ -130,7 +139,10 @@ impl Evaluator {
         Ok(Value::Lambda(Arc::new(func)))
     }
 
-    pub fn convert_params(&self, params: &[AstParameter]) -> Result<Vec<blueprint_engine_core::Parameter>> {
+    pub fn convert_params(
+        &self,
+        params: &[AstParameter],
+    ) -> Result<Vec<blueprint_engine_core::Parameter>> {
         let mut result = Vec::new();
 
         for param in params {
@@ -218,14 +230,24 @@ impl Evaluator {
 
     pub async fn eval_load(
         &self,
-        load: &blueprint_starlark_syntax::syntax::ast::LoadP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
         scope: Arc<Scope>,
     ) -> Result<Value> {
         let module_path = &load.module.node;
 
-        if let Some(native_module) = module_path.strip_prefix("@bp/") {
-            if self.native_registry.has_module(native_module) {
-                return self.bind_native_module(load, native_module, scope).await;
+        if let Some(module_name) = module_path.strip_prefix('@') {
+            if let Some(module_funcs) = self.modules.get(module_name) {
+                return self
+                    .bind_evaluator_module(load, module_name, module_funcs, scope)
+                    .await;
+            }
+
+            if let Some(native_module) = module_name.strip_prefix("bp/") {
+                if self.native_registry.has_module(native_module) {
+                    return self.bind_native_module(load, native_module, scope).await;
+                }
             }
         }
 
@@ -240,7 +262,9 @@ impl Evaluator {
         {
             let cache_read = cache.read().await;
             if let Some(frozen) = cache_read.get(&canonical_path) {
-                return self.bind_load_args(load, &frozen.exports, scope, module_path).await;
+                return self
+                    .bind_load_args(load, &frozen.exports, scope, module_path)
+                    .await;
             }
         }
 
@@ -271,28 +295,59 @@ impl Evaluator {
             cache_write.insert(canonical_path, frozen.clone());
         }
 
-        self.bind_load_args(load, &frozen.exports, scope, module_path).await
+        self.bind_load_args(load, &frozen.exports, scope, module_path)
+            .await
+    }
+
+    async fn bind_evaluator_module(
+        &self,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
+        module_name: &str,
+        module_funcs: &HashMap<String, Arc<NativeFunction>>,
+        scope: Arc<Scope>,
+    ) -> Result<Value> {
+        self.bind_native_functions(load, module_funcs, scope, module_name, &format!("@{}", module_name))
+            .await
     }
 
     async fn bind_native_module(
         &self,
-        load: &blueprint_starlark_syntax::syntax::ast::LoadP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
         module_name: &str,
         scope: Arc<Scope>,
     ) -> Result<Value> {
-        let module_funcs = self.native_registry.get_module(module_name).ok_or_else(|| {
-            BlueprintError::ImportError {
+        let module_funcs = self
+            .native_registry
+            .get_module(module_name)
+            .ok_or_else(|| BlueprintError::ImportError {
                 message: format!("Native module '@bp/{}' not found", module_name),
-            }
-        })?;
+            })?;
 
+        self.bind_native_functions(load, &module_funcs, scope, module_name, &format!("@bp/{}", module_name))
+            .await
+    }
+
+    async fn bind_native_functions(
+        &self,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
+        module_funcs: &HashMap<String, Arc<NativeFunction>>,
+        scope: Arc<Scope>,
+        default_name: &str,
+        display_name: &str,
+    ) -> Result<Value> {
         if load.args.is_empty() {
             let mut dict = IndexMap::new();
             for (func_name, func) in module_funcs {
                 dict.insert(func_name.clone(), Value::NativeFunction(func.clone()));
             }
             scope
-                .define(module_name, Value::Dict(Arc::new(RwLock::new(dict))))
+                .define(default_name, Value::Dict(Arc::new(RwLock::new(dict))))
                 .await;
             return Ok(Value::None);
         }
@@ -322,14 +377,14 @@ impl Evaluator {
             let local_name = arg.local.node.ident.as_str();
             let their_name = &arg.their.node;
 
-            let func = module_funcs.get(their_name).ok_or_else(|| {
-                BlueprintError::ImportError {
+            let func = module_funcs
+                .get(their_name)
+                .ok_or_else(|| BlueprintError::ImportError {
                     message: format!(
-                        "Function '{}' not found in native module '@bp/{}'",
-                        their_name, module_name
+                        "Function '{}' not found in module '{}'",
+                        their_name, display_name
                     ),
-                }
-            })?;
+                })?;
 
             scope
                 .define(local_name, Value::NativeFunction(func.clone()))
@@ -341,7 +396,9 @@ impl Evaluator {
 
     async fn bind_load_args(
         &self,
-        load: &blueprint_starlark_syntax::syntax::ast::LoadP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+        load: &blueprint_starlark_syntax::syntax::ast::LoadP<
+            blueprint_starlark_syntax::syntax::ast::AstNoPayload,
+        >,
         exports: &HashMap<String, Value>,
         scope: Arc<Scope>,
         module_path: &str,
@@ -360,10 +417,7 @@ impl Evaluator {
                     }
                 } else {
                     BlueprintError::ImportError {
-                        message: format!(
-                            "'{}' not found in module '{}'",
-                            their_name, module_path
-                        ),
+                        message: format!("'{}' not found in module '{}'", their_name, module_path),
                     }
                 }
             })?;
@@ -418,7 +472,10 @@ impl Evaluator {
     fn resolve_package_path(&self, module_path: &str) -> Result<PathBuf> {
         let spec = PackageSpec::parse(module_path)?;
 
-        let start_dir = self.current_file.as_ref().and_then(|f| f.parent().map(|p| p.to_path_buf()));
+        let start_dir = self
+            .current_file
+            .as_ref()
+            .and_then(|f| f.parent().map(|p| p.to_path_buf()));
         let packages_dir = get_packages_dir_from(start_dir);
         let package_dir = packages_dir.join(&spec.user).join(spec.dir_name());
         let lib_path = package_dir.join("lib.bp");
@@ -442,7 +499,9 @@ impl Evaluator {
     }
 
     fn find_workspace_root(&self) -> Option<PathBuf> {
-        let start_dir = self.current_file.as_ref()
+        let start_dir = self
+            .current_file
+            .as_ref()
             .and_then(|f| f.parent().map(|p| p.to_path_buf()))
             .or_else(|| std::env::current_dir().ok())?;
         find_workspace_root_from(start_dir)
@@ -492,7 +551,9 @@ impl Evaluator {
         Self::stmt_contains_yield(&stmt.node)
     }
 
-    fn stmt_contains_yield(stmt: &StmtP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>) -> bool {
+    fn stmt_contains_yield(
+        stmt: &StmtP<blueprint_starlark_syntax::syntax::ast::AstNoPayload>,
+    ) -> bool {
         match stmt {
             StmtP::Yield(_) => true,
             StmtP::Statements(stmts) => stmts.iter().any(|s| Self::contains_yield(s)),
@@ -536,7 +597,9 @@ impl Evaluator {
                     || Self::expr_contains_yield(then_expr)
                     || Self::expr_contains_yield(else_expr)
             }
-            ExprP::Op(lhs, _, rhs) => Self::expr_contains_yield(lhs) || Self::expr_contains_yield(rhs),
+            ExprP::Op(lhs, _, rhs) => {
+                Self::expr_contains_yield(lhs) || Self::expr_contains_yield(rhs)
+            }
             ExprP::Not(e) | ExprP::Minus(e) | ExprP::Plus(e) => Self::expr_contains_yield(e),
             ExprP::Index(pair) => {
                 Self::expr_contains_yield(&pair.0) || Self::expr_contains_yield(&pair.1)
@@ -558,7 +621,10 @@ impl Evaluator {
         }
     }
 
-    fn for_clause_contains_yield(first: &blueprint_engine_parser::ForClause, clauses: &[blueprint_engine_parser::Clause]) -> bool {
+    fn for_clause_contains_yield(
+        first: &blueprint_engine_parser::ForClause,
+        clauses: &[blueprint_engine_parser::Clause],
+    ) -> bool {
         use blueprint_engine_parser::Clause;
 
         Self::expr_contains_yield(&first.over)
@@ -568,7 +634,10 @@ impl Evaluator {
             })
     }
 
-    pub fn get_span_location(&self, span: &blueprint_starlark_syntax::codemap::Span) -> (usize, usize) {
+    pub fn get_span_location(
+        &self,
+        span: &blueprint_starlark_syntax::codemap::Span,
+    ) -> (usize, usize) {
         if let Some(ref codemap) = self.codemap {
             let full_span = codemap.full_span();
             if span.begin() <= full_span.end() && span.end() <= full_span.end() {

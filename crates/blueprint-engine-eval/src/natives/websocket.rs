@@ -1,5 +1,5 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::net::SocketAddr;
 use std::sync::Arc;
 
@@ -10,7 +10,11 @@ use axum::{
     routing::get,
     Router,
 };
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, StreamIterator, Value, check_ws};
+use blueprint_engine_core::{
+    check_ws,
+    validation::{get_int_arg, get_string_arg, require_args, require_args_min},
+    BlueprintError, NativeFunction, Result, StreamIterator, Value,
+};
 use futures_util::{SinkExt, StreamExt};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
 use tokio_tungstenite::{connect_async, tungstenite::Message};
@@ -54,10 +58,13 @@ fn create_ws_connection(
                 let msg = args[0].as_string()?;
                 let guard = tx.lock().await;
                 if let Some(sender) = guard.as_ref() {
-                    sender.send(msg).await.map_err(|_| BlueprintError::IoError {
-                        path: "websocket".into(),
-                        message: "WebSocket connection closed".into(),
-                    })?;
+                    sender
+                        .send(msg)
+                        .await
+                        .map_err(|_| BlueprintError::IoError {
+                            path: "websocket".into(),
+                            message: "WebSocket connection closed".into(),
+                        })?;
                 } else {
                     return Err(BlueprintError::IoError {
                         path: "websocket".into(),
@@ -105,13 +112,8 @@ fn create_ws_connection(
 }
 
 async fn ws_connect(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("ws_connect() takes 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let url_str = args[0].as_string()?;
+    require_args("websocket.ws_connect", &args, 1)?;
+    let url_str = get_string_arg("websocket.ws_connect", &args, 0)?;
     check_ws(&url_str).await?;
 
     let headers: HashMap<String, String> = if let Some(h) = kwargs.get("headers") {
@@ -211,13 +213,8 @@ struct WsServerState {
 }
 
 async fn ws_server(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() < 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: "ws_server() requires at least 2 arguments (port, handler)".into(),
-        });
-    }
-
-    let port = args[0].as_int()? as u16;
+    require_args_min("websocket.ws_server", &args, 2)?;
+    let port = get_int_arg("websocket.ws_server", &args, 0)? as u16;
     let handler = args[1].clone();
 
     let host = kwargs
@@ -242,11 +239,12 @@ async fn ws_server(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<V
         .route(&path_clone, get(ws_upgrade_handler))
         .with_state(state);
 
-    let addr: SocketAddr = format!("{}:{}", host, port)
-        .parse()
-        .map_err(|e| BlueprintError::ArgumentError {
-            message: format!("Invalid address: {}", e),
-        })?;
+    let addr: SocketAddr =
+        format!("{}:{}", host, port)
+            .parse()
+            .map_err(|e| BlueprintError::ArgumentError {
+                message: format!("Invalid address: {}", e),
+            })?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
@@ -265,12 +263,13 @@ async fn ws_server(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<V
         .await
         .register(handle.clone(), Some(shutdown_tx));
 
-    let listener = tokio::net::TcpListener::bind(addr)
-        .await
-        .map_err(|e| BlueprintError::IoError {
-            path: addr.to_string(),
-            message: format!("Failed to bind: {}", e),
-        })?;
+    let listener =
+        tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| BlueprintError::IoError {
+                path: addr.to_string(),
+                message: format!("Failed to bind: {}", e),
+            })?;
 
     tokio::spawn(async move {
         axum::serve(listener, router)

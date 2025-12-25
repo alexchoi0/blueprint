@@ -26,6 +26,7 @@ impl NativeModuleRegistry {
         self.modules.get(name)
     }
 
+    #[allow(dead_code)]
     pub fn get_function(&self, module: &str, func: &str) -> Option<Arc<NativeFunction>> {
         self.modules.get(module).and_then(|m| m.get(func).cloned())
     }
@@ -34,6 +35,7 @@ impl NativeModuleRegistry {
         self.modules.contains_key(name)
     }
 
+    #[allow(dead_code)]
     pub fn module_names(&self) -> Vec<&str> {
         self.modules.keys().map(|s| s.as_str()).collect()
     }

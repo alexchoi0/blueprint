@@ -62,7 +62,10 @@ pub async fn map_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result
         }
     });
 
-    Ok(Value::Generator(Arc::new(Generator::new(rx, "map".to_string()))))
+    Ok(Value::Generator(Arc::new(Generator::new(
+        rx,
+        "map".to_string(),
+    ))))
 }
 
 async fn map_generator_task(
@@ -75,7 +78,11 @@ async fn map_generator_task(
             while let Some(item) = gen.next().await {
                 let result = call_func(&func, vec![item]).await?;
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(result, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(result, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -85,7 +92,11 @@ async fn map_generator_task(
             while let Some(item) = iter.next().await {
                 let result = call_func(&func, vec![item]).await?;
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(result, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(result, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -96,7 +107,11 @@ async fn map_generator_task(
             for item in items {
                 let result = call_func(&func, vec![item]).await?;
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(result, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(result, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -106,7 +121,11 @@ async fn map_generator_task(
             for item in t.iter().cloned() {
                 let result = call_func(&func, vec![item]).await?;
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(result, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(result, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -117,7 +136,11 @@ async fn map_generator_task(
                 let item = Value::String(Arc::new(c.to_string()));
                 let result = call_func(&func, vec![item]).await?;
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(result, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(result, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -153,7 +176,10 @@ pub async fn filter_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
         }
     });
 
-    Ok(Value::Generator(Arc::new(Generator::new(rx, "filter".to_string()))))
+    Ok(Value::Generator(Arc::new(Generator::new(
+        rx,
+        "filter".to_string(),
+    ))))
 }
 
 async fn filter_generator_task(
@@ -167,11 +193,18 @@ async fn filter_generator_task(
                 let predicate = if func.is_none() {
                     item.is_truthy_async().await
                 } else {
-                    call_func(&func, vec![item.clone()]).await?.is_truthy_async().await
+                    call_func(&func, vec![item.clone()])
+                        .await?
+                        .is_truthy_async()
+                        .await
                 };
                 if predicate {
                     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                    if tx.send(GeneratorMessage::Yielded(item, resume_tx)).await.is_err() {
+                    if tx
+                        .send(GeneratorMessage::Yielded(item, resume_tx))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                     let _ = resume_rx.await;
@@ -183,11 +216,18 @@ async fn filter_generator_task(
                 let predicate = if func.is_none() {
                     item.is_truthy_async().await
                 } else {
-                    call_func(&func, vec![item.clone()]).await?.is_truthy_async().await
+                    call_func(&func, vec![item.clone()])
+                        .await?
+                        .is_truthy_async()
+                        .await
                 };
                 if predicate {
                     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                    if tx.send(GeneratorMessage::Yielded(item, resume_tx)).await.is_err() {
+                    if tx
+                        .send(GeneratorMessage::Yielded(item, resume_tx))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                     let _ = resume_rx.await;
@@ -200,11 +240,18 @@ async fn filter_generator_task(
                 let predicate = if func.is_none() {
                     item.is_truthy_async().await
                 } else {
-                    call_func(&func, vec![item.clone()]).await?.is_truthy_async().await
+                    call_func(&func, vec![item.clone()])
+                        .await?
+                        .is_truthy_async()
+                        .await
                 };
                 if predicate {
                     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                    if tx.send(GeneratorMessage::Yielded(item, resume_tx)).await.is_err() {
+                    if tx
+                        .send(GeneratorMessage::Yielded(item, resume_tx))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                     let _ = resume_rx.await;
@@ -216,11 +263,18 @@ async fn filter_generator_task(
                 let predicate = if func.is_none() {
                     item.is_truthy_async().await
                 } else {
-                    call_func(&func, vec![item.clone()]).await?.is_truthy_async().await
+                    call_func(&func, vec![item.clone()])
+                        .await?
+                        .is_truthy_async()
+                        .await
                 };
                 if predicate {
                     let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                    if tx.send(GeneratorMessage::Yielded(item, resume_tx)).await.is_err() {
+                    if tx
+                        .send(GeneratorMessage::Yielded(item, resume_tx))
+                        .await
+                        .is_err()
+                    {
                         break;
                     }
                     let _ = resume_rx.await;
@@ -245,7 +299,11 @@ pub async fn enumerate(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
         });
     }
 
-    let start = if args.len() == 2 { args[1].as_int()? } else { 0 };
+    let start = if args.len() == 2 {
+        args[1].as_int()?
+    } else {
+        0
+    };
     let iterable = args[0].clone();
 
     match &iterable {
@@ -256,13 +314,19 @@ pub async fn enumerate(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Res
                 let _ = enumerate_generator_task(iterable, start, tx.clone()).await;
             });
 
-            Ok(Value::Generator(Arc::new(Generator::new(rx, "enumerate".to_string()))))
+            Ok(Value::Generator(Arc::new(Generator::new(
+                rx,
+                "enumerate".to_string(),
+            ))))
         }
         _ => {
             let items = match &iterable {
                 Value::List(l) => l.read().await.clone(),
                 Value::Tuple(t) => t.as_ref().clone(),
-                Value::String(s) => s.chars().map(|c| Value::String(Arc::new(c.to_string()))).collect(),
+                Value::String(s) => s
+                    .chars()
+                    .map(|c| Value::String(Arc::new(c.to_string())))
+                    .collect(),
                 other => {
                     return Err(BlueprintError::TypeError {
                         expected: "iterable".into(),
@@ -293,7 +357,11 @@ async fn enumerate_generator_task(
             while let Some(item) = gen.next().await {
                 let tuple = Value::Tuple(Arc::new(vec![Value::Int(idx), item]));
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(tuple, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(tuple, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -304,7 +372,11 @@ async fn enumerate_generator_task(
             while let Some(item) = iter.next().await {
                 let tuple = Value::Tuple(Arc::new(vec![Value::Int(idx), item]));
                 let (resume_tx, resume_rx) = tokio::sync::oneshot::channel();
-                if tx.send(GeneratorMessage::Yielded(tuple, resume_tx)).await.is_err() {
+                if tx
+                    .send(GeneratorMessage::Yielded(tuple, resume_tx))
+                    .await
+                    .is_err()
+                {
                     break;
                 }
                 let _ = resume_rx.await;
@@ -327,7 +399,10 @@ pub async fn zip(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
         let items = match arg {
             Value::List(l) => l.read().await.clone(),
             Value::Tuple(t) => t.as_ref().clone(),
-            Value::String(s) => s.chars().map(|c| Value::String(Arc::new(c.to_string()))).collect(),
+            Value::String(s) => s
+                .chars()
+                .map(|c| Value::String(Arc::new(c.to_string())))
+                .collect(),
             other => {
                 return Err(BlueprintError::TypeError {
                     expected: "iterable".into(),
@@ -366,7 +441,10 @@ pub async fn sorted(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<
     let mut items = match &args[0] {
         Value::List(l) => l.read().await.clone(),
         Value::Tuple(t) => t.as_ref().clone(),
-        Value::String(s) => s.chars().map(|c| Value::String(Arc::new(c.to_string()))).collect(),
+        Value::String(s) => s
+            .chars()
+            .map(|c| Value::String(Arc::new(c.to_string())))
+            .collect(),
         other => {
             return Err(BlueprintError::TypeError {
                 expected: "iterable".into(),
@@ -375,13 +453,11 @@ pub async fn sorted(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<
         }
     };
 
-    items.sort_by(|a, b| {
-        match (a, b) {
-            (Value::Int(x), Value::Int(y)) => x.cmp(y),
-            (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
-            (Value::String(x), Value::String(y)) => x.cmp(y),
-            _ => std::cmp::Ordering::Equal,
-        }
+    items.sort_by(|a, b| match (a, b) {
+        (Value::Int(x), Value::Int(y)) => x.cmp(y),
+        (Value::Float(x), Value::Float(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+        (Value::String(x), Value::String(y)) => x.cmp(y),
+        _ => std::cmp::Ordering::Equal,
     });
 
     if reverse {
@@ -401,7 +477,10 @@ pub async fn reversed(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Resu
     let mut items = match &args[0] {
         Value::List(l) => l.read().await.clone(),
         Value::Tuple(t) => t.as_ref().clone(),
-        Value::String(s) => s.chars().map(|c| Value::String(Arc::new(c.to_string()))).collect(),
+        Value::String(s) => s
+            .chars()
+            .map(|c| Value::String(Arc::new(c.to_string())))
+            .collect(),
         other => {
             return Err(BlueprintError::TypeError {
                 expected: "iterable".into(),

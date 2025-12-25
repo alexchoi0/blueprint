@@ -1,7 +1,9 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::net::SocketAddr;
+use std::process::Stdio;
 use std::sync::Arc;
+use std::time::Duration;
 
 use axum::{
     body::Body,
@@ -50,6 +52,10 @@ pub enum TriggerType {
     },
     Interval {
         seconds: u64,
+    },
+    Process {
+        command: String,
+        pid: u32,
     },
 }
 
@@ -114,10 +120,12 @@ pub fn get_functions() -> Vec<NativeFunction> {
         NativeFunction::new("http_server", http_server_fn),
         NativeFunction::new("cron", cron_fn),
         NativeFunction::new("interval", interval_fn),
+        NativeFunction::new("spawn", spawn_fn),
         NativeFunction::new("stop", stop_fn),
         NativeFunction::new("stop_all", stop_all_fn),
         NativeFunction::new("running", running_fn),
         NativeFunction::new("triggers", triggers_fn),
+        NativeFunction::new("wait_for_port", wait_for_port_fn),
     ]
 }
 
@@ -140,7 +148,10 @@ fn handle_to_value(handle: &TriggerHandle) -> Value {
 
     match &handle.trigger_type {
         TriggerType::Http { port, host, routes } => {
-            map.insert("type".to_string(), Value::String(Arc::new("http".to_string())));
+            map.insert(
+                "type".to_string(),
+                Value::String(Arc::new("http".to_string())),
+            );
             map.insert("port".to_string(), Value::Int(*port as i64));
             map.insert("host".to_string(), Value::String(Arc::new(host.clone())));
             let route_values: Vec<Value> = routes
@@ -153,12 +164,32 @@ fn handle_to_value(handle: &TriggerHandle) -> Value {
             );
         }
         TriggerType::Cron { schedule } => {
-            map.insert("type".to_string(), Value::String(Arc::new("cron".to_string())));
-            map.insert("schedule".to_string(), Value::String(Arc::new(schedule.clone())));
+            map.insert(
+                "type".to_string(),
+                Value::String(Arc::new("cron".to_string())),
+            );
+            map.insert(
+                "schedule".to_string(),
+                Value::String(Arc::new(schedule.clone())),
+            );
         }
         TriggerType::Interval { seconds } => {
-            map.insert("type".to_string(), Value::String(Arc::new("interval".to_string())));
+            map.insert(
+                "type".to_string(),
+                Value::String(Arc::new("interval".to_string())),
+            );
             map.insert("seconds".to_string(), Value::Int(*seconds as i64));
+        }
+        TriggerType::Process { command, pid } => {
+            map.insert(
+                "type".to_string(),
+                Value::String(Arc::new("process".to_string())),
+            );
+            map.insert(
+                "command".to_string(),
+                Value::String(Arc::new(command.clone())),
+            );
+            map.insert("pid".to_string(), Value::Int(*pid as i64));
         }
     }
 
@@ -234,11 +265,12 @@ async fn http_server_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         };
     }
 
-    let addr: SocketAddr = format!("{}:{}", host, port)
-        .parse()
-        .map_err(|e| BlueprintError::ArgumentError {
-            message: format!("Invalid address: {}", e),
-        })?;
+    let addr: SocketAddr =
+        format!("{}:{}", host, port)
+            .parse()
+            .map_err(|e| BlueprintError::ArgumentError {
+                message: format!("Invalid address: {}", e),
+            })?;
 
     let (shutdown_tx, shutdown_rx) = oneshot::channel::<()>();
 
@@ -257,12 +289,13 @@ async fn http_server_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         .await
         .register(handle.clone(), Some(shutdown_tx));
 
-    let listener = tokio::net::TcpListener::bind(addr).await.map_err(|e| {
-        BlueprintError::IoError {
-            path: format!("{}:{}", host, port),
-            message: e.to_string(),
-        }
-    })?;
+    let listener =
+        tokio::net::TcpListener::bind(addr)
+            .await
+            .map_err(|e| BlueprintError::IoError {
+                path: format!("{}:{}", host, port),
+                message: e.to_string(),
+            })?;
 
     let id_clone = id.clone();
     tokio::spawn(async move {
@@ -366,24 +399,15 @@ async fn build_http_response(value: Value) -> axum::response::Response {
                 (status_code, body).into_response()
             } else {
                 drop(dict);
-                let json = serde_json::to_string(&value_to_json(&Value::Dict(d)).await).unwrap_or_default();
-                (
-                    StatusCode::OK,
-                    [("content-type", "application/json")],
-                    json,
-                )
-                    .into_response()
+                let json = serde_json::to_string(&value_to_json(&Value::Dict(d)).await)
+                    .unwrap_or_default();
+                (StatusCode::OK, [("content-type", "application/json")], json).into_response()
             }
         }
         Value::None => (StatusCode::NO_CONTENT, "").into_response(),
         _ => {
             let json = serde_json::to_string(&value_to_json(&value).await).unwrap_or_default();
-            (
-                StatusCode::OK,
-                [("content-type", "application/json")],
-                json,
-            )
-                .into_response()
+            (StatusCode::OK, [("content-type", "application/json")], json).into_response()
         }
     }
 }
@@ -458,9 +482,11 @@ async fn cron_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
         .await
         .register(handle.clone(), Some(shutdown_tx));
 
-    let mut sched = JobScheduler::new().await.map_err(|e| BlueprintError::InternalError {
-        message: format!("Failed to create scheduler: {}", e),
-    })?;
+    let mut sched = JobScheduler::new()
+        .await
+        .map_err(|e| BlueprintError::InternalError {
+            message: format!("Failed to create scheduler: {}", e),
+        })?;
 
     let handler_clone = handler.clone();
     let id_clone = id.clone();
@@ -475,13 +501,19 @@ async fn cron_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
         message: format!("Invalid cron schedule '{}': {}", schedule_input, e),
     })?;
 
-    sched.add(job).await.map_err(|e| BlueprintError::InternalError {
-        message: format!("Failed to add cron job: {}", e),
-    })?;
+    sched
+        .add(job)
+        .await
+        .map_err(|e| BlueprintError::InternalError {
+            message: format!("Failed to add cron job: {}", e),
+        })?;
 
-    sched.start().await.map_err(|e| BlueprintError::InternalError {
-        message: format!("Failed to start scheduler: {}", e),
-    })?;
+    sched
+        .start()
+        .await
+        .map_err(|e| BlueprintError::InternalError {
+            message: format!("Failed to start scheduler: {}", e),
+        })?;
 
     tokio::spawn(async move {
         let _ = shutdown_rx.await;
@@ -538,6 +570,154 @@ async fn interval_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Resul
     });
 
     Ok(handle_to_value(&handle))
+}
+
+async fn spawn_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.is_empty() {
+        return Err(BlueprintError::ArgumentError {
+            message: "spawn() requires a command string".into(),
+        });
+    }
+
+    let cmd = args[0].as_string()?;
+    let cwd = kwargs.get("cwd").map(|v| v.as_string()).transpose()?;
+    let env_vars = extract_spawn_env(&kwargs).await?;
+
+    let shell = if cfg!(windows) { "cmd" } else { "sh" };
+    let shell_arg = if cfg!(windows) { "/C" } else { "-c" };
+
+    let mut command = tokio::process::Command::new(shell);
+    command
+        .arg(shell_arg)
+        .arg(&cmd)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+
+    if let Some(dir) = cwd {
+        command.current_dir(dir);
+    }
+
+    for (key, value) in env_vars {
+        command.env(key, value);
+    }
+
+    let child = command.spawn().map_err(|e| BlueprintError::ProcessError {
+        command: cmd.clone(),
+        message: e.to_string(),
+    })?;
+
+    let pid = child.id().unwrap_or(0);
+    let id = format!("process-{}", random_id());
+    let running = Arc::new(RwLock::new(true));
+
+    let (shutdown_tx, mut shutdown_rx) = oneshot::channel::<()>();
+
+    let handle = TriggerHandle {
+        id: id.clone(),
+        trigger_type: TriggerType::Process {
+            command: cmd.clone(),
+            pid,
+        },
+        running: running.clone(),
+    };
+
+    TRIGGER_REGISTRY
+        .write()
+        .await
+        .register(handle.clone(), Some(shutdown_tx));
+
+    let id_clone = id.clone();
+    let running_clone = running.clone();
+
+    tokio::spawn(async move {
+        let mut child = child;
+        tokio::select! {
+            _status = child.wait() => {
+                *running_clone.write().await = false;
+                TRIGGER_REGISTRY.write().await.triggers.remove(&id_clone);
+            }
+            _ = &mut shutdown_rx => {
+                let _ = child.kill().await;
+                *running_clone.write().await = false;
+                TRIGGER_REGISTRY.write().await.triggers.remove(&id_clone);
+            }
+        }
+    });
+
+    Ok(handle_to_value(&handle))
+}
+
+async fn extract_spawn_env(kwargs: &HashMap<String, Value>) -> Result<HashMap<String, String>> {
+    let mut env_vars = HashMap::new();
+
+    if let Some(env) = kwargs.get("env") {
+        match env {
+            Value::Dict(d) => {
+                let map = d.read().await;
+                for (k, v) in map.iter() {
+                    env_vars.insert(k.clone(), v.to_display_string());
+                }
+            }
+            _ => {
+                return Err(BlueprintError::TypeError {
+                    expected: "dict".into(),
+                    actual: env.type_name().into(),
+                })
+            }
+        }
+    }
+
+    Ok(env_vars)
+}
+
+async fn wait_for_port_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
+    if args.is_empty() {
+        return Err(BlueprintError::ArgumentError {
+            message: "wait_for_port() requires a port number".into(),
+        });
+    }
+
+    let port = args[0].as_int()? as u16;
+
+    let host = kwargs
+        .get("host")
+        .map(|v| v.as_string())
+        .transpose()?
+        .unwrap_or_else(|| "127.0.0.1".to_string());
+
+    let timeout_secs = kwargs
+        .get("timeout")
+        .map(|v| v.as_int())
+        .transpose()?
+        .unwrap_or(30) as u64;
+
+    let interval_ms = kwargs
+        .get("interval")
+        .map(|v| v.as_int())
+        .transpose()?
+        .unwrap_or(100) as u64;
+
+    let addr = format!("{}:{}", host, port);
+    let start = std::time::Instant::now();
+    let timeout = Duration::from_secs(timeout_secs);
+    let interval = Duration::from_millis(interval_ms);
+
+    loop {
+        if start.elapsed() > timeout {
+            return Err(BlueprintError::ProcessError {
+                command: format!("wait_for_port({})", port),
+                message: format!("Timeout waiting for port {} after {}s", port, timeout_secs),
+            });
+        }
+
+        match tokio::net::TcpStream::connect(&addr).await {
+            Ok(_) => return Ok(Value::Bool(true)),
+            Err(_) => {
+                tokio::time::sleep(interval).await;
+            }
+        }
+    }
 }
 
 async fn execute_trigger_handler(handler: Value) -> Result<Value> {

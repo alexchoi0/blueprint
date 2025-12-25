@@ -1,8 +1,11 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_arg, require_args},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use serde_json;
 use tokio::sync::RwLock;
 
@@ -18,26 +21,24 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn json_encode(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("json.encode() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
+    require_args("json.encode", &args, 1)?;
 
     let indent = kwargs
         .get("indent")
         .and_then(|v| v.as_int().ok())
         .map(|i| i as usize);
 
-    let json_value = value_to_json(&args[0]).await?;
+    let json_value = value_to_json(get_arg("json.encode", &args, 0)?).await?;
 
     let json_str = if let Some(spaces) = indent {
         let buf = Vec::new();
         let indent_bytes = vec![b' '; spaces];
         let formatter = serde_json::ser::PrettyFormatter::with_indent(&indent_bytes);
         let mut ser = serde_json::Serializer::with_formatter(buf, formatter);
-        serde::Serialize::serialize(&json_value, &mut ser).map_err(|e| BlueprintError::JsonError {
-            message: e.to_string(),
+        serde::Serialize::serialize(&json_value, &mut ser).map_err(|e| {
+            BlueprintError::JsonError {
+                message: e.to_string(),
+            }
         })?;
         String::from_utf8(ser.into_inner()).map_err(|e| BlueprintError::JsonError {
             message: e.to_string(),
@@ -52,13 +53,9 @@ async fn json_encode(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
 }
 
 async fn json_decode(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("json.decode() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
+    require_args("json.decode", &args, 1)?;
 
-    let json_str = args[0].as_string()?;
+    let json_str = get_arg("json.decode", &args, 0)?.as_string()?;
 
     let json_value: serde_json::Value =
         serde_json::from_str(&json_str).map_err(|e| BlueprintError::JsonError {

@@ -1,9 +1,12 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{NativeFunction, Result, Value};
-use regex::Regex;
+use blueprint_engine_core::{
+    validation::{get_string_arg, require_args},
+    NativeFunction, Result, Value,
+};
 use once_cell::sync::Lazy;
+use regex::Regex;
 
 pub fn get_functions() -> Vec<NativeFunction> {
     vec![
@@ -148,20 +151,16 @@ fn find_high_entropy_strings(text: &str, threshold: f64, min_len: usize) -> Vec<
 }
 
 async fn redact_pii(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(blueprint_engine_core::BlueprintError::ArgumentError {
-            message: format!("redact_pii() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let text = args[0].as_string()?;
+    require_args("redact.redact_pii", &args, 1)?;
+    let text = get_string_arg("redact.redact_pii", &args, 0)?;
     let mut result = text.clone();
 
     let exclude: Vec<String> = if let Some(exc) = kwargs.get("exclude") {
         match exc {
             Value::List(list) => {
                 let items = list.read().await;
-                items.iter()
+                items
+                    .iter()
                     .filter_map(|v| v.as_string().ok())
                     .map(|s| s.to_uppercase())
                     .collect()
@@ -194,13 +193,8 @@ async fn redact_pii(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<
 }
 
 async fn redact_secrets(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(blueprint_engine_core::BlueprintError::ArgumentError {
-            message: format!("redact_secrets() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let text = args[0].as_string()?;
+    require_args("redact.redact_secrets", &args, 1)?;
+    let text = get_string_arg("redact.redact_secrets", &args, 0)?;
     let mut result = text.clone();
 
     let entropy_threshold = kwargs
@@ -217,7 +211,8 @@ async fn redact_secrets(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         match exc {
             Value::List(list) => {
                 let items = list.read().await;
-                items.iter()
+                items
+                    .iter()
                     .filter_map(|v| v.as_string().ok())
                     .map(|s| s.to_uppercase())
                     .collect()
@@ -291,13 +286,21 @@ mod tests {
 
     #[test]
     fn test_aws_key_pattern() {
-        let pattern = &SECRET_PATTERNS.iter().find(|(l, _)| *l == "AWS_KEY").unwrap().1;
+        let pattern = &SECRET_PATTERNS
+            .iter()
+            .find(|(l, _)| *l == "AWS_KEY")
+            .unwrap()
+            .1;
         assert!(pattern.is_match("AKIAIOSFODNN7EXAMPLE"));
     }
 
     #[test]
     fn test_stripe_key_pattern() {
-        let pattern = &SECRET_PATTERNS.iter().find(|(l, _)| *l == "STRIPE_KEY").unwrap().1;
+        let pattern = &SECRET_PATTERNS
+            .iter()
+            .find(|(l, _)| *l == "STRIPE_KEY")
+            .unwrap()
+            .1;
         // Use test prefix which is safe
         assert!(pattern.is_match("sk_test_00000000000000000000000000"));
         assert!(pattern.is_match("pk_test_00000000000000000000000000"));

@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_int_arg, get_string_arg, require_args},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use indexmap::IndexMap;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream, UdpSocket};
@@ -18,17 +21,9 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn tcp_connect_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "tcp_connect() takes exactly 2 arguments (host, port) ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let host = args[0].as_string()?;
-    let port = args[1].as_int()? as u16;
+    require_args("socket.tcp_connect", &args, 2)?;
+    let host = get_string_arg("socket.tcp_connect", &args, 0)?;
+    let port = get_int_arg("socket.tcp_connect", &args, 1)? as u16;
 
     let timeout_secs = kwargs
         .get("timeout")
@@ -77,12 +72,13 @@ async fn tcp_connect_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
                 .unwrap_or(65536);
 
             let mut buffer = vec![0u8; max_bytes];
-            let n = stream.read(&mut buffer).await.map_err(|e| {
-                BlueprintError::IoError {
+            let n = stream
+                .read(&mut buffer)
+                .await
+                .map_err(|e| BlueprintError::IoError {
                     path: addr.clone(),
                     message: format!("Failed to read response: {}", e),
-                }
-            })?;
+                })?;
 
             buffer.truncate(n);
             let response = String::from_utf8_lossy(&buffer).into_owned();
@@ -103,16 +99,8 @@ async fn tcp_connect_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
 }
 
 async fn tcp_listen_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "tcp_listen() takes exactly 1 argument (port) ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let port = args[0].as_int()? as u16;
+    require_args("socket.tcp_listen", &args, 1)?;
+    let port = get_int_arg("socket.tcp_listen", &args, 0)? as u16;
 
     let host = kwargs
         .get("host")
@@ -121,12 +109,12 @@ async fn tcp_listen_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Resu
 
     let addr = format!("{}:{}", host, port);
 
-    let listener = TcpListener::bind(&addr).await.map_err(|e| {
-        BlueprintError::IoError {
+    let listener = TcpListener::bind(&addr)
+        .await
+        .map_err(|e| BlueprintError::IoError {
             path: addr.clone(),
             message: format!("Failed to bind: {}", e),
-        }
-    })?;
+        })?;
 
     let timeout_secs = kwargs
         .get("timeout")
@@ -178,7 +166,10 @@ async fn tcp_listen_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Resu
     }
 
     let mut result: IndexMap<String, Value> = IndexMap::new();
-    result.insert("peer_addr".to_string(), Value::String(Arc::new(peer_addr.to_string())));
+    result.insert(
+        "peer_addr".to_string(),
+        Value::String(Arc::new(peer_addr.to_string())),
+    );
     result.insert("data".to_string(), Value::String(Arc::new(data)));
     result.insert("bytes_received".to_string(), Value::Int(n as i64));
 
@@ -186,16 +177,8 @@ async fn tcp_listen_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Resu
 }
 
 async fn udp_bind_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "udp_bind() takes exactly 1 argument (port) ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let port = args[0].as_int()? as u16;
+    require_args("socket.udp_bind", &args, 1)?;
+    let port = get_int_arg("socket.udp_bind", &args, 0)? as u16;
 
     let host = kwargs
         .get("host")
@@ -204,12 +187,12 @@ async fn udp_bind_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
 
     let addr = format!("{}:{}", host, port);
 
-    let socket = UdpSocket::bind(&addr).await.map_err(|e| {
-        BlueprintError::IoError {
+    let socket = UdpSocket::bind(&addr)
+        .await
+        .map_err(|e| BlueprintError::IoError {
             path: addr.clone(),
             message: format!("Failed to bind UDP socket: {}", e),
-        }
-    })?;
+        })?;
 
     let timeout_secs = kwargs
         .get("timeout")
@@ -254,7 +237,10 @@ async fn udp_bind_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
     }
 
     let mut result: IndexMap<String, Value> = IndexMap::new();
-    result.insert("peer_addr".to_string(), Value::String(Arc::new(peer_addr.to_string())));
+    result.insert(
+        "peer_addr".to_string(),
+        Value::String(Arc::new(peer_addr.to_string())),
+    );
     result.insert("data".to_string(), Value::String(Arc::new(data)));
     result.insert("bytes_received".to_string(), Value::Int(n as i64));
 
@@ -262,18 +248,10 @@ async fn udp_bind_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
 }
 
 async fn udp_send_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 3 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "udp_send() takes exactly 3 arguments (host, port, data) ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let host = args[0].as_string()?;
-    let port = args[1].as_int()? as u16;
-    let data = args[2].as_string()?;
+    require_args("socket.udp_send", &args, 3)?;
+    let host = get_string_arg("socket.udp_send", &args, 0)?;
+    let port = get_int_arg("socket.udp_send", &args, 1)? as u16;
+    let data = get_string_arg("socket.udp_send", &args, 2)?;
 
     let socket = UdpSocket::bind("0.0.0.0:0")
         .await
@@ -283,13 +261,14 @@ async fn udp_send_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
         })?;
 
     let addr = format!("{}:{}", host, port);
-    let bytes_sent = socket
-        .send_to(data.as_bytes(), &addr)
-        .await
-        .map_err(|e| BlueprintError::IoError {
-            path: addr.clone(),
-            message: format!("Failed to send UDP data: {}", e),
-        })?;
+    let bytes_sent =
+        socket
+            .send_to(data.as_bytes(), &addr)
+            .await
+            .map_err(|e| BlueprintError::IoError {
+                path: addr.clone(),
+                message: format!("Failed to send UDP data: {}", e),
+            })?;
 
     let wait_response = kwargs
         .get("wait_response")
@@ -339,16 +318,8 @@ async fn udp_send_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result
 }
 
 async fn dns_lookup_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "dns_lookup() takes exactly 1 argument ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let hostname = args[0].as_string()?;
+    require_args("socket.dns_lookup", &args, 1)?;
+    let hostname = get_string_arg("socket.dns_lookup", &args, 0)?;
 
     let addrs = tokio::net::lookup_host(format!("{}:0", hostname))
         .await

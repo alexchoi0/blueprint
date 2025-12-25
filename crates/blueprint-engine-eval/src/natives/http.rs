@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use blueprint_engine_core::{
+    check_fs_write, check_http,
+    validation::{get_string_arg, require_args, require_args_range},
     BlueprintError, HttpResponse, NativeFunction, Result, StreamIterator, Value,
-    check_http, check_fs_write,
 };
 use futures_util::StreamExt;
 use reqwest::Client;
@@ -17,17 +18,9 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn http_request(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 4 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "http_request() takes 2 to 4 arguments ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let method = args[0].as_string()?.to_uppercase();
-    let url = args[1].as_string()?;
+    require_args_range("http.http_request", &args, 2, 4)?;
+    let method = get_string_arg("http.http_request", &args, 0)?.to_uppercase();
+    let url = get_string_arg("http.http_request", &args, 1)?;
     check_http(&url).await?;
 
     let body = if args.len() >= 3 {
@@ -60,10 +53,7 @@ async fn http_request(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Resul
         .and_then(|v| v.as_float().ok())
         .unwrap_or(30.0);
 
-    let stream = kwargs
-        .get("stream")
-        .map(|v| v.is_truthy())
-        .unwrap_or(false);
+    let stream = kwargs.get("stream").map(|v| v.is_truthy()).unwrap_or(false);
 
     if stream {
         let chunk_size = kwargs
@@ -76,7 +66,9 @@ async fn http_request(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Resul
 
         let url_clone = url.clone();
         tokio::spawn(async move {
-            if let Err(e) = stream_request(&method, &url_clone, body, headers, tx.clone(), chunk_size).await {
+            if let Err(e) =
+                stream_request(&method, &url_clone, body, headers, tx.clone(), chunk_size).await
+            {
                 eprintln!("HTTP stream error: {}", e);
             }
             tx.send(None).await.ok();
@@ -121,10 +113,13 @@ async fn stream_request(
         request = request.body(b);
     }
 
-    let response = request.send().await.map_err(|e| BlueprintError::HttpError {
-        url: url.into(),
-        message: e.to_string(),
-    })?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| BlueprintError::HttpError {
+            url: url.into(),
+            message: e.to_string(),
+        })?;
 
     if !response.status().is_success() {
         return Err(BlueprintError::HttpError {
@@ -150,7 +145,9 @@ async fn stream_request(
             if let Ok(s) = String::from_utf8(data.clone()) {
                 tx.send(Some(s)).await.ok();
             } else {
-                tx.send(Some(String::from_utf8_lossy(&data).to_string())).await.ok();
+                tx.send(Some(String::from_utf8_lossy(&data).to_string()))
+                    .await
+                    .ok();
             }
         }
     }
@@ -159,7 +156,9 @@ async fn stream_request(
         if let Ok(s) = String::from_utf8(buffer.clone()) {
             tx.send(Some(s)).await.ok();
         } else {
-            tx.send(Some(String::from_utf8_lossy(&buffer).to_string())).await.ok();
+            tx.send(Some(String::from_utf8_lossy(&buffer).to_string()))
+                .await
+                .ok();
         }
     }
 
@@ -167,14 +166,9 @@ async fn stream_request(
 }
 
 async fn download(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("download() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let url = args[0].as_string()?;
-    let path = args[1].as_string()?;
+    require_args("http.download", &args, 2)?;
+    let url = get_string_arg("http.download", &args, 0)?;
+    let path = get_string_arg("http.download", &args, 1)?;
     check_http(&url).await?;
     check_fs_write(&path).await?;
 
@@ -192,10 +186,13 @@ async fn download(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<V
         });
     }
 
-    let bytes = response.bytes().await.map_err(|e| BlueprintError::HttpError {
-        url: url.clone(),
-        message: e.to_string(),
-    })?;
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| BlueprintError::HttpError {
+            url: url.clone(),
+            message: e.to_string(),
+        })?;
 
     tokio::fs::write(&path, &bytes)
         .await
@@ -262,10 +259,13 @@ async fn make_request(
         request = request.body(b);
     }
 
-    let response = request.send().await.map_err(|e| BlueprintError::HttpError {
-        url: url.into(),
-        message: e.to_string(),
-    })?;
+    let response = request
+        .send()
+        .await
+        .map_err(|e| BlueprintError::HttpError {
+            url: url.into(),
+            message: e.to_string(),
+        })?;
 
     let status = response.status().as_u16() as i64;
 
@@ -275,10 +275,13 @@ async fn make_request(
         .map(|(k, v)| (k.to_string(), v.to_str().unwrap_or("").to_string()))
         .collect();
 
-    let body_text = response.text().await.map_err(|e| BlueprintError::HttpError {
-        url: url.into(),
-        message: e.to_string(),
-    })?;
+    let body_text = response
+        .text()
+        .await
+        .map_err(|e| BlueprintError::HttpError {
+            url: url.into(),
+            message: e.to_string(),
+        })?;
 
     Ok(Value::Response(Arc::new(HttpResponse {
         status,

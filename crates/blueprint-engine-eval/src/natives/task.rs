@@ -1,26 +1,23 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::require_args,
+    BlueprintError, NativeFunction, Result, Value,
+};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
 use crate::eval::Evaluator;
 
 pub fn get_functions() -> Vec<NativeFunction> {
-    vec![
-        NativeFunction::new("task", task_fn),
-    ]
+    vec![NativeFunction::new("task", task_fn)]
 }
 
 async fn task_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("task() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
+    require_args("task.task", &args, 1)?;
 
     let max_wait = kwargs.get("max_wait").map(|v| v.as_float()).transpose()?;
     let wait_until = kwargs.get("wait_until").map(|v| v.as_float()).transpose()?;
