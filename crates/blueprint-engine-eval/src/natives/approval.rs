@@ -1,27 +1,23 @@
-use std::collections::HashMap;
 use indexmap::IndexMap;
+use std::collections::HashMap;
 use std::io::{self, BufRead, Write};
 use std::sync::Arc;
 use std::time::Duration;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_string_arg, require_args},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use tokio::sync::RwLock;
 use tokio::time::timeout;
 
 pub fn get_functions() -> Vec<NativeFunction> {
-    vec![
-        NativeFunction::new("ask_for_approval", ask_for_approval),
-    ]
+    vec![NativeFunction::new("ask_for_approval", ask_for_approval)]
 }
 
 async fn ask_for_approval(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("ask_for_approval() takes 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let prompt = args[0].as_string()?;
+    require_args("approval.ask_for_approval", &args, 1)?;
+    let prompt = get_string_arg("approval.ask_for_approval", &args, 0)?;
 
     let method = kwargs
         .get("method")
@@ -29,18 +25,12 @@ async fn ask_for_approval(args: Vec<Value>, kwargs: HashMap<String, Value>) -> R
         .transpose()?
         .unwrap_or_else(|| "terminal".to_string());
 
-    let timeout_secs = kwargs
-        .get("timeout")
-        .map(|v| v.as_float())
-        .transpose()?;
+    let timeout_secs = kwargs.get("timeout").map(|v| v.as_float()).transpose()?;
 
     match method.as_str() {
         "terminal" => ask_terminal(&prompt, timeout_secs).await,
         _ => Err(BlueprintError::ArgumentError {
-            message: format!(
-                "Unknown approval method '{}'. Supported: terminal",
-                method
-            ),
+            message: format!("Unknown approval method '{}'. Supported: terminal", method),
         }),
     }
 }
@@ -73,9 +63,11 @@ async fn ask_terminal(prompt: &str, timeout_secs: Option<f64>) -> Result<Value> 
             }
         }
     } else {
-        read_input.await.map_err(|e| BlueprintError::InternalError {
-            message: e.to_string(),
-        })?
+        read_input
+            .await
+            .map_err(|e| BlueprintError::InternalError {
+                message: e.to_string(),
+            })?
     };
 
     let approved = matches!(response.as_str(), "y" | "yes");
@@ -92,7 +84,10 @@ async fn ask_terminal(prompt: &str, timeout_secs: Option<f64>) -> Result<Value> 
 fn build_response(approved: bool, method: &str, timeout_secs: Option<f64>) -> Value {
     let mut result = IndexMap::new();
     result.insert("approved".to_string(), Value::Bool(approved));
-    result.insert("method".to_string(), Value::String(Arc::new(method.to_string())));
+    result.insert(
+        "method".to_string(),
+        Value::String(Arc::new(method.to_string())),
+    );
 
     if let Some(t) = timeout_secs {
         result.insert("timeout".to_string(), Value::Float(t));

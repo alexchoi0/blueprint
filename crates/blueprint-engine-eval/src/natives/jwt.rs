@@ -6,18 +6,18 @@ use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde_json::Value as JsonValue;
 
 pub fn get_functions() -> Vec<NativeFunction> {
-    vec![
-        NativeFunction::new("jwt_sign", jwt_sign_fn),
-    ]
+    vec![NativeFunction::new("jwt_sign", jwt_sign_fn)]
 }
 
 async fn jwt_sign_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
     let claims = if !args.is_empty() {
         &args[0]
     } else {
-        kwargs.get("claims").ok_or_else(|| BlueprintError::ArgumentError {
-            message: "jwt_sign() requires 'claims' argument".into(),
-        })?
+        kwargs
+            .get("claims")
+            .ok_or_else(|| BlueprintError::ArgumentError {
+                message: "jwt_sign() requires 'claims' argument".into(),
+            })?
     };
 
     let private_key = kwargs

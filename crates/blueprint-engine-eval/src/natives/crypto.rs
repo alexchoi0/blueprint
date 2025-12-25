@@ -1,7 +1,10 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use blueprint_engine_core::{BlueprintError, NativeFunction, Result, Value};
+use blueprint_engine_core::{
+    validation::{get_string_arg, require_args},
+    BlueprintError, NativeFunction, Result, Value,
+};
 use hmac::{Hmac, Mac};
 use md5::Md5;
 use sha1::Sha1;
@@ -23,13 +26,8 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn md5_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("md5() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let data = args[0].as_string()?;
+    require_args("crypto.md5", &args, 1)?;
+    let data = get_string_arg("crypto.md5", &args, 0)?;
     let mut hasher = Md5::new();
     hasher.update(data.as_bytes());
     let result = hasher.finalize();
@@ -38,13 +36,8 @@ async fn md5_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Val
 }
 
 async fn sha1_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("sha1() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let data = args[0].as_string()?;
+    require_args("crypto.sha1", &args, 1)?;
+    let data = get_string_arg("crypto.sha1", &args, 0)?;
     let mut hasher = Sha1::new();
     hasher.update(data.as_bytes());
     let result = hasher.finalize();
@@ -53,13 +46,8 @@ async fn sha1_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn sha256_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("sha256() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let data = args[0].as_string()?;
+    require_args("crypto.sha256", &args, 1)?;
+    let data = get_string_arg("crypto.sha256", &args, 0)?;
     let mut hasher = Sha256::new();
     hasher.update(data.as_bytes());
     let result = hasher.finalize();
@@ -68,13 +56,8 @@ async fn sha256_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<
 }
 
 async fn sha512_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("sha512() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
-    let data = args[0].as_string()?;
+    require_args("crypto.sha512", &args, 1)?;
+    let data = get_string_arg("crypto.sha512", &args, 0)?;
     let mut hasher = Sha512::new();
     hasher.update(data.as_bytes());
     let result = hasher.finalize();
@@ -83,14 +66,9 @@ async fn sha512_fn(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<
 }
 
 async fn hmac_sha256_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("hmac_sha256() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let key_str = args[0].as_string()?;
-    let message = args[1].as_string()?;
+    require_args("crypto.hmac_sha256", &args, 2)?;
+    let key_str = get_string_arg("crypto.hmac_sha256", &args, 0)?;
+    let message = get_string_arg("crypto.hmac_sha256", &args, 1)?;
 
     let key_is_hex = kwargs
         .get("key_hex")
@@ -105,8 +83,8 @@ async fn hmac_sha256_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         key_str.as_bytes().to_vec()
     };
 
-    let mut mac = HmacSha256::new_from_slice(&key_bytes)
-        .map_err(|e| BlueprintError::InternalError {
+    let mut mac =
+        HmacSha256::new_from_slice(&key_bytes).map_err(|e| BlueprintError::InternalError {
             message: format!("Invalid HMAC key: {}", e),
         })?;
 
@@ -117,14 +95,9 @@ async fn hmac_sha256_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
 }
 
 async fn hmac_sha512_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("hmac_sha512() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let key_str = args[0].as_string()?;
-    let message = args[1].as_string()?;
+    require_args("crypto.hmac_sha512", &args, 2)?;
+    let key_str = get_string_arg("crypto.hmac_sha512", &args, 0)?;
+    let message = get_string_arg("crypto.hmac_sha512", &args, 1)?;
 
     let key_is_hex = kwargs
         .get("key_hex")
@@ -139,8 +112,8 @@ async fn hmac_sha512_fn(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Res
         key_str.as_bytes().to_vec()
     };
 
-    let mut mac = HmacSha512::new_from_slice(&key_bytes)
-        .map_err(|e| BlueprintError::InternalError {
+    let mut mac =
+        HmacSha512::new_from_slice(&key_bytes).map_err(|e| BlueprintError::InternalError {
             message: format!("Invalid HMAC key: {}", e),
         })?;
 
@@ -154,17 +127,9 @@ async fn constant_time_compare_fn(
     args: Vec<Value>,
     _kwargs: HashMap<String, Value>,
 ) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!(
-                "constant_time_compare() takes exactly 2 arguments ({} given)",
-                args.len()
-            ),
-        });
-    }
-
-    let a = args[0].as_string()?;
-    let b = args[1].as_string()?;
+    require_args("crypto.constant_time_compare", &args, 2)?;
+    let a = get_string_arg("crypto.constant_time_compare", &args, 0)?;
+    let b = get_string_arg("crypto.constant_time_compare", &args, 1)?;
 
     use subtle::ConstantTimeEq;
     let result = a.as_bytes().ct_eq(b.as_bytes());

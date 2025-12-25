@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use blueprint_engine_core::{
+    check_env_read, check_env_write, check_process_run, check_process_shell,
+    validation::{get_string_arg, require_args, require_args_range},
     BlueprintError, NativeFunction, ProcessResult, Result, Value,
-    check_process_run, check_process_shell, check_env_read, check_env_write,
 };
 use tokio::process::Command;
 
@@ -19,11 +20,7 @@ pub fn get_functions() -> Vec<NativeFunction> {
 }
 
 async fn run(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("run() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
+    require_args("process.run", &args, 1)?;
 
     let cmd_args = match &args[0] {
         Value::List(l) => {
@@ -87,15 +84,9 @@ async fn run(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> 
 }
 
 async fn shell(args: Vec<Value>, kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 1 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("shell() takes exactly 1 argument ({} given)", args.len()),
-        });
-    }
-
+    require_args("process.shell", &args, 1)?;
     check_process_shell().await?;
-
-    let cmd = args[0].as_string()?;
+    let cmd = get_string_arg("process.shell", &args, 0)?;
     shell_impl(&cmd, &kwargs).await
 }
 
@@ -133,13 +124,8 @@ async fn shell_impl(cmd: &str, kwargs: &HashMap<String, Value>) -> Result<Value>
 }
 
 async fn env_var(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.is_empty() || args.len() > 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("env() takes 1 or 2 arguments ({} given)", args.len()),
-        });
-    }
-
-    let name = args[0].as_string()?;
+    require_args_range("process.env", &args, 1, 2)?;
+    let name = get_string_arg("process.env", &args, 0)?;
     check_env_read(&name).await?;
 
     let default = if args.len() == 2 {
@@ -153,16 +139,10 @@ async fn env_var(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Va
 }
 
 async fn set_env(args: Vec<Value>, _kwargs: HashMap<String, Value>) -> Result<Value> {
-    if args.len() != 2 {
-        return Err(BlueprintError::ArgumentError {
-            message: format!("set_env() takes exactly 2 arguments ({} given)", args.len()),
-        });
-    }
-
+    require_args("process.set_env", &args, 2)?;
     check_env_write().await?;
-
-    let name = args[0].as_string()?;
-    let value = args[1].as_string()?;
+    let name = get_string_arg("process.set_env", &args, 0)?;
+    let value = get_string_arg("process.set_env", &args, 1)?;
 
     std::env::set_var(&name, &value);
     Ok(Value::None)

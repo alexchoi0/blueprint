@@ -18,7 +18,6 @@ mod time;
 pub mod triggers;
 mod websocket;
 
-pub use builtins::call_func;
 pub use registry::NativeModuleRegistry;
 
 use crate::eval::Evaluator;
