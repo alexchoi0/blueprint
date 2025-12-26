@@ -4,168 +4,8 @@ use std::path::{Path, PathBuf};
 use blueprint_engine_parser::{AstExpr, AstStmt, ExprP, StmtP};
 use blueprint_starlark_syntax::syntax::ast::{ArgumentP, ParameterP};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NodeKind {
-    Entry,
-    Exit,
-    Statement,
-    Condition,
-    ForLoop,
-    Match,
-    Yield,
-    Import,
-    Export,
-}
-
-#[derive(Debug, Clone)]
-pub struct CfgNode {
-    pub id: usize,
-    pub kind: NodeKind,
-    pub label: String,
-    pub file: PathBuf,
-    pub function: Option<String>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum EdgeKind {
-    Sequential,
-    TrueBranch,
-    FalseBranch,
-    LoopBack,
-    LoopDone,
-    LoopBreak,
-    Call,
-    Imports,
-    Exports,
-}
-
-#[derive(Debug, Clone)]
-pub struct CfgEdge {
-    pub from: usize,
-    pub to: usize,
-    pub kind: EdgeKind,
-}
-
-#[derive(Debug, Default)]
-pub struct ControlFlowGraph {
-    pub nodes: Vec<CfgNode>,
-    pub edges: Vec<CfgEdge>,
-    node_counter: usize,
-}
-
-impl ControlFlowGraph {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    fn add_node(&mut self, kind: NodeKind, label: String, file: &Path, function: Option<&str>) -> usize {
-        let id = self.node_counter;
-        self.node_counter += 1;
-        self.nodes.push(CfgNode {
-            id,
-            kind,
-            label,
-            file: file.to_path_buf(),
-            function: function.map(|s| s.to_string()),
-        });
-        id
-    }
-
-    fn add_edge(&mut self, from: usize, to: usize, kind: EdgeKind) {
-        self.edges.push(CfgEdge { from, to, kind });
-    }
-
-    pub fn to_dot(&self) -> String {
-        let mut dot = String::new();
-        dot.push_str("digraph ControlFlowGraph {\n");
-        dot.push_str("    rankdir=TB;\n");
-        dot.push_str("    node [fontname=\"Helvetica\", fontsize=10];\n");
-        dot.push_str("    edge [fontname=\"Helvetica\", fontsize=9];\n");
-        dot.push_str("\n");
-
-        // Group nodes by function
-        let mut functions: HashMap<(PathBuf, Option<String>), Vec<&CfgNode>> = HashMap::new();
-        for node in &self.nodes {
-            functions
-                .entry((node.file.clone(), node.function.clone()))
-                .or_default()
-                .push(node);
-        }
-
-        // Create subgraphs for each function
-        for ((file, func), nodes) in &functions {
-            let file_stem = file.file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_else(|| "unknown".to_string());
-
-            let subgraph_name = match func {
-                Some(f) => format!("{}::{}", file_stem, f),
-                None => format!("{}::<module>", file_stem),
-            };
-
-            dot.push_str(&format!("    subgraph \"cluster_{}\" {{\n", subgraph_name));
-            dot.push_str(&format!("        label=\"{}\";\n", subgraph_name));
-            dot.push_str("        style=rounded;\n");
-            dot.push_str("        color=gray;\n");
-
-            for node in nodes {
-                let (shape, style, color) = match node.kind {
-                    NodeKind::Entry => ("ellipse", "filled", "lightgreen"),
-                    NodeKind::Exit => ("ellipse", "filled", "lightcoral"),
-                    NodeKind::Statement => ("box", "rounded", "white"),
-                    NodeKind::Condition => ("diamond", "filled", "lightyellow"),
-                    NodeKind::ForLoop => ("hexagon", "filled", "lightblue"),
-                    NodeKind::Match => ("octagon", "filled", "plum"),
-                    NodeKind::Yield => ("parallelogram", "filled", "orange"),
-                    NodeKind::Import => ("cds", "filled", "lightyellow"),
-                    NodeKind::Export => ("cds", "filled", "lightcyan"),
-                };
-
-                let escaped_label = node.label
-                    .replace('\\', "\\\\")
-                    .replace('"', "\\\"")
-                    .replace('\n', "\\n");
-
-                dot.push_str(&format!(
-                    "        n{} [label=\"{}\" shape={} style=\"{}\" fillcolor=\"{}\"];\n",
-                    node.id, escaped_label, shape, style, color
-                ));
-            }
-
-            dot.push_str("    }\n\n");
-        }
-
-        // Add edges
-        for edge in &self.edges {
-            let (style, color, label) = match edge.kind {
-                EdgeKind::Sequential => ("solid", "black", ""),
-                EdgeKind::TrueBranch => ("solid", "green", "T"),
-                EdgeKind::FalseBranch => ("solid", "red", "F"),
-                EdgeKind::LoopBack => ("dashed", "blue", "loop"),
-                EdgeKind::LoopDone => ("solid", "purple", "done"),
-                EdgeKind::LoopBreak => ("bold", "red", "break"),
-                EdgeKind::Call => ("dotted", "orange", "call"),
-                EdgeKind::Imports => ("dashed", "purple", "from"),
-                EdgeKind::Exports => ("bold", "cyan", ""),
-            };
-
-            if label.is_empty() {
-                dot.push_str(&format!(
-                    "    n{} -> n{} [style={} color={}];\n",
-                    edge.from, edge.to, style, color
-                ));
-            } else {
-                dot.push_str(&format!(
-                    "    n{} -> n{} [style={} color={} label=\"{}\"];\n",
-                    edge.from, edge.to, style, color, label
-                ));
-            }
-        }
-
-        dot.push_str("}\n");
-        dot
-    }
-}
+use super::graph::ControlFlowGraph;
+use super::types::{EdgeKind, NodeKind};
 
 pub struct CfgBuilder {
     graph: ControlFlowGraph,
@@ -176,9 +16,7 @@ pub struct CfgBuilder {
     module_exports: Vec<String>,
     current_function_exit: Option<usize>,
     pending_false_branches: Vec<usize>,
-    // Track export nodes by file path for cross-file linking
     export_nodes: HashMap<PathBuf, usize>,
-    // Track import nodes: (node_id, source_module_path, importing_file_path)
     import_nodes: Vec<(usize, String, PathBuf)>,
 }
 
@@ -209,11 +47,9 @@ impl CfgBuilder {
         self.function_entries.clear();
         self.module_exports.clear();
 
-        // First pass: collect function definitions and exports
         self.collect_functions(module.statements());
         self.collect_exports(module.statements());
 
-        // Second pass: build CFG for module-level code
         let entry = self.graph.add_node(
             NodeKind::Entry,
             "module entry".to_string(),
@@ -233,7 +69,6 @@ impl CfgBuilder {
             self.add_predecessor_edge(last, exit);
         }
 
-        // Create export nodes for public symbols
         if !self.module_exports.is_empty() {
             let exports_label = self.module_exports.join(", ");
             let export_node = self.graph.add_node(
@@ -243,19 +78,20 @@ impl CfgBuilder {
                 None,
             );
             self.graph.add_edge(exit, export_node, EdgeKind::Exports);
-            // Track export node for cross-file linking (use canonicalized path)
             if let Ok(canonical) = self.current_file.canonicalize() {
                 self.export_nodes.insert(canonical, export_node);
             }
         }
     }
 
-    /// Link import nodes to their corresponding export nodes after all files are analyzed
     pub fn link_imports(&mut self) {
         for (import_node, source_path, importing_file) in self.import_nodes.clone() {
-            // Resolve relative path from the importing file's directory
             let resolved = if source_path.starts_with("./") || source_path.starts_with("../") {
-                if let Some(parent) = importing_file.canonicalize().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
+                if let Some(parent) = importing_file
+                    .canonicalize()
+                    .ok()
+                    .and_then(|p| p.parent().map(|p| p.to_path_buf()))
+                {
                     parent.join(&source_path).canonicalize().ok()
                 } else {
                     None
@@ -272,6 +108,10 @@ impl CfgBuilder {
         }
     }
 
+    pub fn build(self) -> ControlFlowGraph {
+        self.graph
+    }
+
     fn collect_exports(&mut self, stmt: &AstStmt) {
         match &stmt.node {
             StmtP::Statements(stmts) => {
@@ -280,7 +120,6 @@ impl CfgBuilder {
                 }
             }
             StmtP::Assign(assign) => {
-                // Only collect top-level assignments (not inside functions)
                 if self.current_function.is_none() {
                     if let Some(name) = self.get_assign_name(&assign.lhs) {
                         if !name.starts_with('_') {
@@ -305,7 +144,10 @@ impl CfgBuilder {
         }
     }
 
-    fn get_assign_name(&self, target: &blueprint_starlark_syntax::syntax::ast::AstAssignTarget) -> Option<String> {
+    fn get_assign_name(
+        &self,
+        target: &blueprint_starlark_syntax::syntax::ast::AstAssignTarget,
+    ) -> Option<String> {
         use blueprint_starlark_syntax::syntax::ast::AssignTargetP;
         match &target.node {
             AssignTargetP::Identifier(ident) => Some(ident.node.ident.as_str().to_string()),
@@ -323,15 +165,16 @@ impl CfgBuilder {
             StmtP::Def(def) => {
                 let name = def.name.node.ident.as_str().to_string();
 
-                // Extract parameter names
-                let params: Vec<String> = def.params.iter().filter_map(|p| {
-                    match &p.node {
+                let params: Vec<String> = def
+                    .params
+                    .iter()
+                    .filter_map(|p| match &p.node {
                         ParameterP::Normal(n, _, _) => Some(n.node.ident.as_str().to_string()),
                         ParameterP::Args(n, _) => Some(format!("*{}", n.node.ident.as_str())),
                         ParameterP::KwArgs(n, _) => Some(format!("**{}", n.node.ident.as_str())),
                         ParameterP::NoArgs | ParameterP::Slash => None,
-                    }
-                }).collect();
+                    })
+                    .collect();
                 let params_str = params.join(", ");
 
                 let prev_func = self.current_function.take();
@@ -393,9 +236,7 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, node);
                 }
 
-                // Add call edges for function calls in expression
                 self.add_call_edges(expr, node);
-
                 vec![node]
             }
 
@@ -416,7 +257,6 @@ impl CfgBuilder {
                 }
 
                 self.add_call_edges(&assign.rhs, node);
-
                 vec![node]
             }
 
@@ -453,21 +293,16 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, cond_node);
                 }
 
-                // True branch
                 let then_exits = self.analyze_stmt(then_block, vec![cond_node]);
 
-                // Create merge point
                 let mut exits = then_exits;
-                exits.push(cond_node); // False branch goes directly to merge
+                exits.push(cond_node);
 
-                // Update edges: true branch
                 if let Some(first_then) = self.find_first_successor(cond_node) {
                     self.update_edge_kind(cond_node, first_then, EdgeKind::TrueBranch);
                 }
 
-                // Mark cond_node for false branch edge to next statement
                 self.pending_false_branches.push(cond_node);
-
                 exits
             }
 
@@ -486,13 +321,9 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, cond_node);
                 }
 
-                // True branch
                 let then_exits = self.analyze_stmt(then_block, vec![cond_node]);
-
-                // False branch
                 let else_exits = self.analyze_stmt(else_block, vec![cond_node]);
 
-                // Update edge kinds
                 if let Some(first_then) = self.find_first_successor_after(cond_node, 0) {
                     self.update_edge_kind(cond_node, first_then, EdgeKind::TrueBranch);
                 }
@@ -500,7 +331,6 @@ impl CfgBuilder {
                     self.update_edge_kind(cond_node, first_else, EdgeKind::FalseBranch);
                 }
 
-                // Merge exits
                 let mut exits = then_exits;
                 exits.extend(else_exits);
                 exits
@@ -521,24 +351,18 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, loop_node);
                 }
 
-                // Push loop context for break/continue
                 self.loop_stack.push(LoopContext {
                     header: loop_node,
                     break_targets: Vec::new(),
                 });
 
-                // Loop body
                 let body_exits = self.analyze_stmt(&for_stmt.body, vec![loop_node]);
-
-                // Pop loop context and collect break targets
                 let loop_ctx = self.loop_stack.pop().unwrap();
 
-                // Back edge from body end to loop header
                 for exit in &body_exits {
                     self.graph.add_edge(*exit, loop_node, EdgeKind::LoopBack);
                 }
 
-                // Create a merge node for loop exit
                 let loop_exit = self.graph.add_node(
                     NodeKind::Statement,
                     "loop exit".to_string(),
@@ -546,10 +370,8 @@ impl CfgBuilder {
                     self.current_function.as_deref(),
                 );
 
-                // Normal loop completion (iterator exhausted)
                 self.graph.add_edge(loop_node, loop_exit, EdgeKind::LoopDone);
 
-                // Break statements exit the loop
                 for break_node in loop_ctx.break_targets {
                     self.graph.add_edge(break_node, loop_exit, EdgeKind::LoopBreak);
                 }
@@ -605,17 +427,14 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, node);
                 }
 
-                // Add call edges for function calls in return expression
                 if let Some(e) = expr {
                     self.add_call_edges(e, node);
                 }
 
-                // Connect return to function exit node
                 if let Some(exit) = self.current_function_exit {
                     self.graph.add_edge(node, exit, EdgeKind::Sequential);
                 }
 
-                // Return doesn't have successors in normal flow
                 vec![]
             }
 
@@ -636,7 +455,6 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, node);
                 }
 
-                // Add call edges for function calls in yield expression
                 if let Some(e) = expr {
                     self.add_call_edges(e, node);
                 }
@@ -646,7 +464,9 @@ impl CfgBuilder {
 
             StmtP::Load(load) => {
                 let module_path = load.module.node.clone();
-                let symbols: Vec<String> = load.args.iter()
+                let symbols: Vec<String> = load
+                    .args
+                    .iter()
                     .map(|a| a.local.node.ident.as_str().to_string())
                     .collect();
 
@@ -658,8 +478,8 @@ impl CfgBuilder {
                     self.current_function.as_deref(),
                 );
 
-                // Track import for cross-file linking
-                self.import_nodes.push((node, module_path, self.current_file.clone()));
+                self.import_nodes
+                    .push((node, module_path, self.current_file.clone()));
 
                 for pred in &predecessors {
                     self.add_predecessor_edge(*pred, node);
@@ -668,14 +488,13 @@ impl CfgBuilder {
                 vec![node]
             }
 
-            StmtP::Def(_) => {
-                // Function definitions are handled separately in collect_functions
-                predecessors
-            }
+            StmtP::Def(_) => predecessors,
 
             StmtP::Struct(struct_def) => {
                 let name = struct_def.name.node.ident.as_str();
-                let fields: Vec<String> = struct_def.fields.iter()
+                let fields: Vec<String> = struct_def
+                    .fields
+                    .iter()
                     .map(|f| f.node.name.node.ident.as_str().to_string())
                     .collect();
 
@@ -706,7 +525,6 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, node);
                 }
 
-                // Record break target for the enclosing loop
                 if let Some(loop_ctx) = self.loop_stack.last_mut() {
                     loop_ctx.break_targets.push(node);
                 }
@@ -726,7 +544,6 @@ impl CfgBuilder {
                     self.add_predecessor_edge(*pred, node);
                 }
 
-                // Connect continue back to loop header
                 if let Some(loop_ctx) = self.loop_stack.last() {
                     self.graph.add_edge(node, loop_ctx.header, EdgeKind::LoopBack);
                 }
@@ -761,11 +578,12 @@ impl CfgBuilder {
                     }
                 }
 
-                // Recurse into arguments
                 for arg in &args.args {
                     match &arg.node {
-                        ArgumentP::Positional(e) | ArgumentP::Named(_, e)
-                        | ArgumentP::Args(e) | ArgumentP::KwArgs(e) => {
+                        ArgumentP::Positional(e)
+                        | ArgumentP::Named(_, e)
+                        | ArgumentP::Args(e)
+                        | ArgumentP::KwArgs(e) => {
                             self.add_call_edges(e, from_node);
                         }
                     }
@@ -797,13 +615,13 @@ impl CfgBuilder {
     }
 
     fn find_first_successor(&self, node: usize) -> Option<usize> {
-        self.graph.edges.iter()
-            .find(|e| e.from == node)
-            .map(|e| e.to)
+        self.graph.edges.iter().find(|e| e.from == node).map(|e| e.to)
     }
 
     fn find_first_successor_after(&self, node: usize, skip: usize) -> Option<usize> {
-        self.graph.edges.iter()
+        self.graph
+            .edges
+            .iter()
             .filter(|e| e.from == node)
             .nth(skip)
             .map(|e| e.to)
@@ -837,16 +655,22 @@ impl CfgBuilder {
                     AstLiteral::Int(i) => format!("{}", i.node),
                     AstLiteral::Float(f) => format!("{}", f.node),
                     AstLiteral::String(s) => format!("\"{}\"", s.node),
-                    AstLiteral::ByteString(s) => format!("b\"{}\"", String::from_utf8_lossy(&s.node)),
+                    AstLiteral::ByteString(s) => {
+                        format!("b\"{}\"", String::from_utf8_lossy(&s.node))
+                    }
                     AstLiteral::Ellipsis => "...".to_string(),
                 }
             }
             ExprP::Call(callee, args) => {
                 let callee_str = self.expr_to_string(callee);
-                let args_str: Vec<String> = args.args.iter()
+                let args_str: Vec<String> = args
+                    .args
+                    .iter()
                     .map(|a| match &a.node {
                         ArgumentP::Positional(e) => self.expr_to_string(e),
-                        ArgumentP::Named(name, e) => format!("{}={}", name.node, self.expr_to_string(e)),
+                        ArgumentP::Named(name, e) => {
+                            format!("{}={}", name.node, self.expr_to_string(e))
+                        }
                         ArgumentP::Args(e) => format!("*{}", self.expr_to_string(e)),
                         ArgumentP::KwArgs(e) => format!("**{}", self.expr_to_string(e)),
                     })
@@ -858,7 +682,11 @@ impl CfgBuilder {
             }
             ExprP::Index(pair) => {
                 let (target, index) = pair.as_ref();
-                format!("{}[{}]", self.expr_to_string(target), self.expr_to_string(index))
+                format!(
+                    "{}[{}]",
+                    self.expr_to_string(target),
+                    self.expr_to_string(index)
+                )
             }
             ExprP::Op(lhs, op, rhs) => {
                 use blueprint_starlark_syntax::syntax::ast::BinOp;
@@ -885,7 +713,12 @@ impl CfgBuilder {
                     BinOp::LeftShift => "<<",
                     BinOp::RightShift => ">>",
                 };
-                format!("{} {} {}", self.expr_to_string(lhs), op_str, self.expr_to_string(rhs))
+                format!(
+                    "{} {} {}",
+                    self.expr_to_string(lhs),
+                    op_str,
+                    self.expr_to_string(rhs)
+                )
             }
             ExprP::Not(inner) => format!("not {}", self.expr_to_string(inner)),
             ExprP::Minus(inner) => format!("-{}", self.expr_to_string(inner)),
@@ -899,26 +732,33 @@ impl CfgBuilder {
                 format!("({})", items_str.join(", "))
             }
             ExprP::Dict(pairs) => {
-                let pairs_str: Vec<String> = pairs.iter()
-                    .map(|(k, v)| format!("{}: {}", self.expr_to_string(k), self.expr_to_string(v)))
+                let pairs_str: Vec<String> = pairs
+                    .iter()
+                    .map(|(k, v)| {
+                        format!("{}: {}", self.expr_to_string(k), self.expr_to_string(v))
+                    })
                     .collect();
                 format!("{{{}}}", pairs_str.join(", "))
             }
             ExprP::If(triple) => {
                 let (cond, then_expr, else_expr) = triple.as_ref();
-                format!("{} if {} else {}",
+                format!(
+                    "{} if {} else {}",
                     self.expr_to_string(then_expr),
                     self.expr_to_string(cond),
-                    self.expr_to_string(else_expr))
+                    self.expr_to_string(else_expr)
+                )
             }
             ExprP::Lambda(lambda) => {
                 format!("lambda: {}", self.expr_to_string(&lambda.body))
             }
             ExprP::ListComprehension(body, first, _) => {
-                format!("[{} for {} in {}]",
+                format!(
+                    "[{} for {} in {}]",
                     self.expr_to_string(body),
                     self.assign_target_to_string(&first.var),
-                    self.expr_to_string(&first.over))
+                    self.expr_to_string(&first.over)
+                )
             }
             ExprP::FString(fstring) => {
                 format!("f\"...{}...\"", fstring.expressions.len())
@@ -927,28 +767,32 @@ impl CfgBuilder {
         }
     }
 
-    fn assign_target_to_string(&self, target: &blueprint_starlark_syntax::syntax::ast::AstAssignTarget) -> String {
+    fn assign_target_to_string(
+        &self,
+        target: &blueprint_starlark_syntax::syntax::ast::AstAssignTarget,
+    ) -> String {
         use blueprint_starlark_syntax::syntax::ast::AssignTargetP;
         match &target.node {
             AssignTargetP::Identifier(ident) => ident.node.ident.as_str().to_string(),
             AssignTargetP::Tuple(targets) => {
-                let items: Vec<String> = targets.iter()
+                let items: Vec<String> = targets
+                    .iter()
                     .map(|t| self.assign_target_to_string(t))
                     .collect();
                 format!("({})", items.join(", "))
             }
             AssignTargetP::Index(pair) => {
                 let (target, index) = pair.as_ref();
-                format!("{}[{}]", self.expr_to_string(target), self.expr_to_string(index))
+                format!(
+                    "{}[{}]",
+                    self.expr_to_string(target),
+                    self.expr_to_string(index)
+                )
             }
             AssignTargetP::Dot(target, attr) => {
                 format!("{}.{}", self.expr_to_string(target), attr.node)
             }
         }
-    }
-
-    pub fn build(self) -> ControlFlowGraph {
-        self.graph
     }
 }
 
@@ -956,28 +800,4 @@ impl Default for CfgBuilder {
     fn default() -> Self {
         Self::new()
     }
-}
-
-pub fn analyze_files(files: &[PathBuf]) -> ControlFlowGraph {
-    let mut builder = CfgBuilder::new();
-
-    for file in files {
-        let content = match std::fs::read_to_string(file) {
-            Ok(c) => c,
-            Err(_) => continue,
-        };
-
-        let filename = file.to_string_lossy().to_string();
-        let module = match blueprint_engine_parser::parse(&filename, &content) {
-            Ok(m) => m,
-            Err(_) => continue,
-        };
-
-        builder.analyze_file(file, &module);
-    }
-
-    // Link imports to exports across files
-    builder.link_imports();
-
-    builder.build()
 }
