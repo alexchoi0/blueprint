@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use blueprint_engine_parser::{AstExpr, AstStmt, ExprP, StmtP};
-use blueprint_starlark_syntax::syntax::ast::ArgumentP;
+use blueprint_starlark_syntax::syntax::ast::{ArgumentP, ParameterP};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NodeKind {
@@ -13,6 +13,7 @@ pub enum NodeKind {
     ForLoop,
     Match,
     Yield,
+    Import,
     Export,
 }
 
@@ -34,6 +35,7 @@ pub enum EdgeKind {
     LoopDone,
     LoopBreak,
     Call,
+    Imports,
     Exports,
 }
 
@@ -115,6 +117,7 @@ impl ControlFlowGraph {
                     NodeKind::ForLoop => ("hexagon", "filled", "lightblue"),
                     NodeKind::Match => ("octagon", "filled", "plum"),
                     NodeKind::Yield => ("parallelogram", "filled", "orange"),
+                    NodeKind::Import => ("cds", "filled", "lightyellow"),
                     NodeKind::Export => ("cds", "filled", "lightcyan"),
                 };
 
@@ -142,6 +145,7 @@ impl ControlFlowGraph {
                 EdgeKind::LoopDone => ("solid", "purple", "done"),
                 EdgeKind::LoopBreak => ("bold", "red", "break"),
                 EdgeKind::Call => ("dotted", "orange", "call"),
+                EdgeKind::Imports => ("dashed", "purple", "from"),
                 EdgeKind::Exports => ("bold", "cyan", ""),
             };
 
@@ -172,6 +176,10 @@ pub struct CfgBuilder {
     module_exports: Vec<String>,
     current_function_exit: Option<usize>,
     pending_false_branches: Vec<usize>,
+    // Track export nodes by file path for cross-file linking
+    export_nodes: HashMap<PathBuf, usize>,
+    // Track import nodes: (node_id, source_module_path, importing_file_path)
+    import_nodes: Vec<(usize, String, PathBuf)>,
 }
 
 struct LoopContext {
@@ -190,6 +198,8 @@ impl CfgBuilder {
             module_exports: Vec::new(),
             current_function_exit: None,
             pending_false_branches: Vec::new(),
+            export_nodes: HashMap::new(),
+            import_nodes: Vec::new(),
         }
     }
 
@@ -233,6 +243,32 @@ impl CfgBuilder {
                 None,
             );
             self.graph.add_edge(exit, export_node, EdgeKind::Exports);
+            // Track export node for cross-file linking (use canonicalized path)
+            if let Ok(canonical) = self.current_file.canonicalize() {
+                self.export_nodes.insert(canonical, export_node);
+            }
+        }
+    }
+
+    /// Link import nodes to their corresponding export nodes after all files are analyzed
+    pub fn link_imports(&mut self) {
+        for (import_node, source_path, importing_file) in self.import_nodes.clone() {
+            // Resolve relative path from the importing file's directory
+            let resolved = if source_path.starts_with("./") || source_path.starts_with("../") {
+                if let Some(parent) = importing_file.canonicalize().ok().and_then(|p| p.parent().map(|p| p.to_path_buf())) {
+                    parent.join(&source_path).canonicalize().ok()
+                } else {
+                    None
+                }
+            } else {
+                None
+            };
+
+            if let Some(resolved_path) = resolved {
+                if let Some(&export_node) = self.export_nodes.get(&resolved_path) {
+                    self.graph.add_edge(import_node, export_node, EdgeKind::Imports);
+                }
+            }
         }
     }
 
@@ -287,13 +323,24 @@ impl CfgBuilder {
             StmtP::Def(def) => {
                 let name = def.name.node.ident.as_str().to_string();
 
+                // Extract parameter names
+                let params: Vec<String> = def.params.iter().filter_map(|p| {
+                    match &p.node {
+                        ParameterP::Normal(n, _, _) => Some(n.node.ident.as_str().to_string()),
+                        ParameterP::Args(n, _) => Some(format!("*{}", n.node.ident.as_str())),
+                        ParameterP::KwArgs(n, _) => Some(format!("**{}", n.node.ident.as_str())),
+                        ParameterP::NoArgs | ParameterP::Slash => None,
+                    }
+                }).collect();
+                let params_str = params.join(", ");
+
                 let prev_func = self.current_function.take();
                 let prev_exit = self.current_function_exit.take();
                 self.current_function = Some(name.clone());
 
                 let entry = self.graph.add_node(
                     NodeKind::Entry,
-                    format!("{}()", name),
+                    format!("{}({})", name, params_str),
                     &self.current_file,
                     Some(&name),
                 );
@@ -598,18 +645,21 @@ impl CfgBuilder {
             }
 
             StmtP::Load(load) => {
-                let module = &load.module.node;
+                let module_path = load.module.node.clone();
                 let symbols: Vec<String> = load.args.iter()
                     .map(|a| a.local.node.ident.as_str().to_string())
                     .collect();
 
-                let label = format!("load({}, {})", module, symbols.join(", "));
+                let label = format!("import: {} from {}", symbols.join(", "), module_path);
                 let node = self.graph.add_node(
-                    NodeKind::Statement,
+                    NodeKind::Import,
                     label,
                     &self.current_file,
                     self.current_function.as_deref(),
                 );
+
+                // Track import for cross-file linking
+                self.import_nodes.push((node, module_path, self.current_file.clone()));
 
                 for pred in &predecessors {
                     self.add_predecessor_edge(*pred, node);
@@ -925,6 +975,9 @@ pub fn analyze_files(files: &[PathBuf]) -> ControlFlowGraph {
 
         builder.analyze_file(file, &module);
     }
+
+    // Link imports to exports across files
+    builder.link_imports();
 
     builder.build()
 }
